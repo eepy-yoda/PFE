@@ -11,21 +11,28 @@ router = APIRouter()
 import secrets
 from app.services.email_service import email_service
 
+from app.core.config import settings
+
+@router.get("/debug-config")
+def debug_config():
+    return {
+        "db_url": settings.DATABASE_URL.split("@")[-1], # Masking password
+        "supabase_url": settings.SUPABASE_URL
+    }
+
 @router.post("/signup", response_model=UserRead)
 def signup(user_in: UserCreate, db: Session = Depends(get_db)):
+    # Check if user already exists locally
     user = user_service.get_user_by_email(db, user_in.email)
     if user:
+        print(f"[SIGNUP] ⚠️ REJECTED: Email {user_in.email} already exists in public.users.")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="The user with this email already exists in the system",
         )
     
-    # Generate verification token
-    token = secrets.token_urlsafe(32)
-    new_user = user_service.create_user(db, user_in, verification_token=token)
-    
-    # Send email
-    email_service.send_verification_email(new_user.email, token)
+    # Create user (this handles Supabase Auth and terminal logging)
+    new_user = user_service.create_user(db, user_in)
     
     return new_user
 

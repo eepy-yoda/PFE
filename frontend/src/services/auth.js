@@ -1,10 +1,11 @@
 import axios from 'axios';
+import { supabase } from '../lib/supabaseClient';
 
-const API_URL = 'http://localhost:8080/api/v1/auth';
+const API_URL = import.meta.env.VITE_API_URL + '/auth';
 
 // Create axios instance with default config
 export const api = axios.create({
-    baseURL: 'http://localhost:8080/api/v1',
+    baseURL: import.meta.env.VITE_API_URL,
     headers: {
         'Content-Type': 'application/json',
     },
@@ -38,18 +39,9 @@ export const authService = {
     },
 
     async register(userData) {
+        console.log('REGISTER PAYLOAD:', userData);
+        // We now call our backend API so we can see logs in the terminal
         const response = await api.post('/auth/signup', userData);
-        // After registration, automatically log the user in
-        if (response.data) {
-            try {
-                // Auto-login after registration
-                const loginResponse = await this.login(userData.email, userData.password);
-                return { ...response.data, ...loginResponse };
-            } catch (loginError) {
-                console.warn('Auto-login after registration failed:', loginError);
-                return response.data;
-            }
-        }
         return response.data;
     },
 

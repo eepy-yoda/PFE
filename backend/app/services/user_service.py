@@ -32,39 +32,88 @@ def sync_to_supabase(user_data):
     except Exception as e:
         print(f"SYNC WARNING: Could not mirror to cloud: {e}")
 
+from supabase import create_client, Client
+from app.core.config import settings
+
+# Initialize Supabase Client for Auth
+supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+
 class UserService:
+    supabase = supabase
+    
     @staticmethod
     def get_user_by_email(db: Session, email: str):
         return db.query(User).filter(User.email == email).first()
 
     @staticmethod
-    def create_user(db: Session, user_in: UserCreate, verification_token: str = None):
-        db_user = User(
-            email=user_in.email,
-            full_name=user_in.full_name,
-            agency_name=user_in.agency_name,
-            hashed_password=get_password_hash(user_in.password),
-            role=user_in.role,
-            verification_token=verification_token,
-            is_verified=False
-        )
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
+    def create_user(db: Session, user_in: UserCreate):
+        print(f"\n[SIGNUP] New registration request for: {user_in.email}")
         
-        # Mirror to Supabase Cloud via REST (Bypasses Port 5432 block!)
-        sync_to_supabase({
-            "id": db_user.id,
-            "email": db_user.email,
-            "full_name": db_user.full_name,
-            "agency_name": db_user.agency_name,
-            "hashed_password": db_user.hashed_password,
-            "role": db_user.role,
-            "is_verified": False,
-            "verification_token": verification_token
-        })
-        
-        return db_user
+        try:
+            # 1. Register with Supabase Auth
+            # Note: Supabase sends the verification email automatically
+            print(f"[SIGNUP] Step 1: Registering with Supabase Auth...")
+            
+            role_str = user_in.role.value if hasattr(user_in.role, 'value') else str(user_in.role)
+            
+            metadata = {
+                "full_name": user_in.full_name,
+                "agency_name": user_in.agency_name,
+                "role": role_str
+            }
+            print(f"[SIGNUP] Metadata reaching Supabase: {metadata}")
+
+            auth_response = supabase.auth.sign_up({
+                "email": user_in.email,
+                "password": user_in.password,
+                "options": {
+                    "data": metadata
+                }
+            })
+            
+            if not auth_response.user:
+                print(f"[SIGNUP] ❌ ERROR: Supabase Auth did not return a user record.")
+                raise HTTPException(status_code=400, detail="Supabase Auth rejected this email (it might already exist in Supabase Auth).")
+
+            print(f"[SIGNUP] ✅ Supabase Auth Success (ID: {auth_response.user.id})")
+
+            # 2. Insert into local DB manually
+            print(f"[SIGNUP] Step 2: Manually inserting into public.users...")
+            try:
+                new_db_user = User(
+                    id=auth_response.user.id,
+                    email=user_in.email,
+                    full_name=user_in.full_name,
+                    agency_name=user_in.agency_name,
+                    hashed_password=get_password_hash(user_in.password), # Storing it as requested
+                    role=user_in.role,
+                    is_active=True,
+                    is_verified=False
+                )
+                db.add(new_db_user)
+                db.commit()
+                db.refresh(new_db_user)
+                print(f"[SIGNUP] ✅ Manual DB Insert Success! User saved in public.users.")
+            except Exception as db_err:
+                print(f"[SIGNUP] ❌ Manual DB Insert FAILED: {str(db_err)}")
+                if "duplicate key" in str(db_err).lower():
+                    print("[SIGNUP] TIP: This ID or Email already exists in public.users. Use clean_db.py to reset.")
+                db.rollback()
+                raise HTTPException(status_code=500, detail=f"Database Sync Error: {str(db_err)}")
+            
+            return {
+                "id": auth_response.user.id,
+                "email": user_in.email,
+                "full_name": user_in.full_name,
+                "role": user_in.role,
+                "is_active": True,
+                "is_verified": False,
+                "created_at": auth_response.user.created_at
+            }
+
+        except Exception as e:
+            print(f"[SIGNUP] ❌ CRITICAL ERROR: {str(e)}")
+            raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
     def get_user_by_token(db: Session, token: str):
