@@ -1,10 +1,10 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8000/api/v1/auth';
+const API_URL = 'http://localhost:8080/api/v1/auth';
 
 // Create axios instance with default config
 export const api = axios.create({
-    baseURL: 'http://localhost:8000/api/v1',
+    baseURL: 'http://localhost:8080/api/v1',
     headers: {
         'Content-Type': 'application/json',
     },

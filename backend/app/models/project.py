@@ -6,10 +6,10 @@ import uuid
 from app.db.session import Base
 
 class ProjectStatus(str, enum.Enum):
-    PLANNING = "planning"
-    ACTIVE = "active"
-    COMPLETED = "completed"
-    ON_HOLD = "on_hold"
+    planning = "planning"
+    active = "active"
+    completed = "completed"
+    on_hold = "on_hold"
 
 class Project(Base):
     __tablename__ = "projects"
@@ -17,7 +17,7 @@ class Project(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=False, index=True)
     description = Column(Text, nullable=True)
-    status = Column(SQLEnum(ProjectStatus), default=ProjectStatus.PLANNING, nullable=False)
+    status = Column(SQLEnum(ProjectStatus), default=ProjectStatus.planning, nullable=False)
     
     # Relationships
     manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)

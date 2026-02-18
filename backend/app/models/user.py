@@ -6,9 +6,9 @@ import enum
 from app.db.session import Base
 
 class UserRole(str, enum.Enum):
-    CLIENT = "client"
-    ADMIN = "admin"
-    MANAGER = "manager"
+    client = "client"
+    admin = "admin"
+    manager = "manager"
 
 class User(Base):
     __tablename__ = "users"
@@ -17,7 +17,7 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     full_name = Column(String, nullable=False)
     hashed_password = Column(String, nullable=False)
-    role = Column(SQLEnum(UserRole), default=UserRole.CLIENT, nullable=False)
+    role = Column(SQLEnum(UserRole), default=UserRole.client, nullable=False)
     avatar_url = Column(String, nullable=True)
     agency_name = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)

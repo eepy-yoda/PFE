@@ -5,16 +5,16 @@ from datetime import datetime
 import enum
 
 class UserRole(str, enum.Enum):
-    CLIENT = "client"
-    ADMIN = "admin"
-    MANAGER = "manager"
+    client = "client"
+    admin = "admin"
+    manager = "manager"
 
 class UserBase(BaseModel):
     email: EmailStr
     full_name: str
     username: Optional[str] = None
     agency_name: Optional[str] = None
-    role: Optional[UserRole] = UserRole.CLIENT
+    role: Optional[UserRole] = UserRole.client
 
 class UserCreate(UserBase):
     password: str

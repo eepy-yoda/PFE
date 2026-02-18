@@ -7,7 +7,7 @@ from app.models.project import ProjectStatus
 class ProjectBase(BaseModel):
     name: str
     description: Optional[str] = None
-    status: ProjectStatus = ProjectStatus.PLANNING
+    status: ProjectStatus = ProjectStatus.planning
     client_id: Optional[UUID] = None
 
 class ProjectCreate(ProjectBase):
