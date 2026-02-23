@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
 from app.db.session import get_db
-from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
+from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate, BriefRequest, AnswerRequest
 from app.services.project_service import project_service
 from app.api.deps import get_current_user
 from app.models.user import User
@@ -21,6 +21,31 @@ def create_project(
             detail="Not enough permissions"
         )
     return project_service.create_project(db, project_in, current_user.id)
+
+@router.post("/request-brief", response_model=ProjectRead)
+def request_brief(
+    brief_in: BriefRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if current_user.role != "client":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only clients can request a brief"
+        )
+    return project_service.request_brief(db, brief_in, current_user.id)
+
+@router.post("/submit-answer", response_model=ProjectRead)
+def submit_answer(
+    answer_in: AnswerRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    project = project_service.get_project(db, answer_in.project_id)
+    if not project or project.client_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Project not found or access denied")
+    
+    return project_service.submit_answer(db, answer_in.project_id, answer_in.answer)
 
 @router.get("/", response_model=List[ProjectRead])
 def read_projects(

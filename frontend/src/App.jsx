@@ -7,6 +7,7 @@ import ConnectionTest from "./pages/ConnectionTest";
 import HowItWorks from "./pages/HowItWorks";
 import Dashboard from "./pages/Dashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
+import Brief from "./pages/Brief";
 
 function App() {
   return (
@@ -31,6 +32,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/brief"
+          element={
+            <ProtectedRoute>
+              <Brief />
             </ProtectedRoute>
           }
         />

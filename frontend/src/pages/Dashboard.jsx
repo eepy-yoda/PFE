@@ -241,8 +241,9 @@ const Dashboard = () => {
                             <h2 className="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
                             <div className="grid grid-cols-2 gap-4">
                                 <QuickActionButton
-                                    icon={FileText}
-                                    label={isClient ? "View Projects" : "Create Project"}
+                                    icon={Sparkles}
+                                    label={isClient ? "Request New Brief" : "Create Project"}
+                                    onClick={() => navigate(isClient ? '/brief' : '/dashboard')}
                                     color="blue"
                                 />
                                 <QuickActionButton
@@ -382,7 +383,7 @@ const ProjectCard = ({ project, isClient }) => {
 };
 
 // Quick Action Button Component
-const QuickActionButton = ({ icon: Icon, label, color }) => {
+const QuickActionButton = ({ icon: Icon, label, color, onClick }) => {
     const colorClasses = {
         blue: 'bg-blue-50 hover:bg-blue-100 text-blue-600',
         green: 'bg-green-50 hover:bg-green-100 text-green-600',
@@ -391,7 +392,10 @@ const QuickActionButton = ({ icon: Icon, label, color }) => {
     };
 
     return (
-        <button className={`${colorClasses[color]} p-4 rounded-lg flex flex-col items-center gap-2 transition-all hover:scale-105`}>
+        <button
+            onClick={onClick}
+            className={`${colorClasses[color]} p-4 rounded-lg flex flex-col items-center gap-2 transition-all hover:scale-105 w-full`}
+        >
             <Icon size={24} />
             <span className="text-sm font-medium">{label}</span>
         </button>

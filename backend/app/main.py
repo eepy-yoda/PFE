@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import auth, users, projects
+from app.api.routes import auth, users, projects, brief
 from app.core.config import settings
 from app.db.session import engine, Base
 from app.models import user, project # Ensure models are imported for Base.metadata
@@ -40,6 +40,7 @@ async def log_requests(request, call_next):
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
 app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["users"])
 app.include_router(projects.router, prefix=f"{settings.API_V1_STR}/projects", tags=["projects"])
+app.include_router(brief.router, prefix=f"{settings.API_V1_STR}/brief", tags=["brief"])
 
 @app.get("/")
 def root():
