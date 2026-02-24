@@ -88,14 +88,15 @@ const Navbar: React.FC = () => {
                         Get Started
                     </Link>
 
-                    <div className="h-6 w-px bg-gray-200 dark:bg-gray-800 mx-2" />
+                    <div className="h-6 w-px bg-gray-200 dark:bg-gray-800 mx-2 hidden sm:block" />
 
                     <button
                         onClick={toggleTheme}
-                        className="p-2 rounded-xl text-gray-500 hover:text-primary hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-200"
+                        className="flex items-center justify-center p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-600 dark:text-gray-300 border border-gray-100 dark:border-gray-800 hover:text-primary hover:border-primary/30 transition-all duration-300 shadow-sm"
+                        aria-label="Toggle theme"
                         title={theme === 'light' ? "Switch to Dark Mode" : "Switch to Light Mode"}
                     >
-                        {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                        {theme === 'light' ? <Moon size={18} className="fill-current" /> : <Sun size={18} />}
                     </button>
                 </div>
 
