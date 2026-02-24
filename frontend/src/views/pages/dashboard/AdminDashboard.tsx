@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import useDashboardViewModel from '../../../viewmodels/useDashboardViewModel';
 import type { Project } from '../../../types';
+import { useTheme } from '../../../context/ThemeContext';
+import { Sun, Moon } from 'lucide-react';
 
 const StatCard: React.FC<{
     icon: LucideIcon;
@@ -47,6 +49,7 @@ const StatCard: React.FC<{
 
 const AdminDashboard: React.FC = () => {
     const { user, projects, loading, handleLogout } = useDashboardViewModel();
+    const { theme, toggleTheme } = useTheme();
 
     if (loading) {
         return (
@@ -80,6 +83,14 @@ const AdminDashboard: React.FC = () => {
                                 <Bell size={20} />
                                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full border-2 border-white dark:border-gray-950"></span>
                             </button>
+
+                            <button
+                                onClick={toggleTheme}
+                                className="p-2 text-gray-400 hover:text-primary transition-colors"
+                            >
+                                {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                            </button>
+
                             <button className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
                                 <Settings size={20} />
                             </button>

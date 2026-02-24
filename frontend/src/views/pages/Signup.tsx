@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { User, Mail, Briefcase, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { User, Mail, Briefcase, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Sun, Moon } from 'lucide-react';
 import useSignupViewModel from '../../viewmodels/useSignupViewModel';
+import { useTheme } from '../../context/ThemeContext';
 
 const Signup: React.FC = () => {
     const {
@@ -15,10 +16,19 @@ const Signup: React.FC = () => {
         handleSubmit,
         togglePasswordVisibility,
     } = useSignupViewModel();
+    const { theme, toggleTheme } = useTheme();
 
     return (
-    return (
-        <div className="min-h-screen flex bg-white dark:bg-gray-950 transition-colors duration-300">
+        <div className="min-h-screen flex bg-white dark:bg-gray-950 transition-colors duration-300 relative">
+            {/* Absolute Top Toggle for Auth Pages */}
+            <div className="absolute top-6 right-6 z-10">
+                <button
+                    onClick={toggleTheme}
+                    className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-500 hover:text-primary border border-gray-100 dark:border-gray-800 shadow-sm transition-all"
+                >
+                    {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                </button>
+            </div>
             {/* Left Side - Gradient */}
             <div className="hidden lg:flex w-1/2 bg-gradient-to-br from-blue-500 to-indigo-600 relative overflow-hidden items-center justify-center p-12 text-white">
                 <div className="absolute inset-0">

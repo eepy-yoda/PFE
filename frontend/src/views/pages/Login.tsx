@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { Mail, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Mail, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Sun, Moon } from 'lucide-react';
 import useLoginViewModel from '../../viewmodels/useLoginViewModel';
+import { useTheme } from '../../context/ThemeContext';
 
 const Login: React.FC = () => {
     const {
@@ -12,9 +13,19 @@ const Login: React.FC = () => {
         handleSubmit,
         togglePasswordVisibility,
     } = useLoginViewModel();
+    const { theme, toggleTheme } = useTheme();
 
     return (
-        <div className="min-h-screen flex bg-white dark:bg-gray-950 transition-colors duration-300">
+        <div className="min-h-screen flex bg-white dark:bg-gray-950 transition-colors duration-300 relative">
+            {/* Absolute Top Toggle for Auth Pages */}
+            <div className="absolute top-6 right-6 z-10">
+                <button
+                    onClick={toggleTheme}
+                    className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 text-gray-500 hover:text-primary border border-gray-100 dark:border-gray-800 shadow-sm transition-all"
+                >
+                    {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+                </button>
+            </div>
             {/* Left Side - Form */}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8 lg:p-24 animate-in fade-in duration-500">
                 <div className="w-full max-w-md space-y-8">
