@@ -11,6 +11,7 @@ import ClientDashboard from "./views/pages/dashboard/ClientDashboard";
 import AdminDashboard from "./views/pages/dashboard/AdminDashboard";
 import ProtectedRoute from "./views/components/ProtectedRoute";
 import { ThemeProvider } from "./context/ThemeContext";
+import GuidedBrief from "./views/pages/GuidedBrief";
 
 const App: React.FC = () => {
     return (
@@ -63,7 +64,7 @@ const App: React.FC = () => {
                             </ProtectedRoute>
                         }
                     />
-                    <Route path="/guided-chat" element={<ProtectedRoute><div className="flex items-center justify-center h-screen text-2xl font-bold text-gray-400">Guided Chat coming soon...</div></ProtectedRoute>} />
+                    <Route path="/guided-brief" element={<ProtectedRoute><GuidedBrief /></ProtectedRoute>} />
 
                     <Route path="*" element={<div className="flex items-center justify-center h-screen text-xl text-gray-500 font-medium">404 - Page Not Found</div>} />
                 </Routes>

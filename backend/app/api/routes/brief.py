@@ -92,8 +92,17 @@ async def start_brief(
                             n8n_data = parsed_line
                             break
                         elif parsed_line.get("type") == "item" and "content" in parsed_line:
+                            content_str = parsed_line["content"].strip()
+                            # Strip markdown code blocks if present
+                            if content_str.startswith("```"):
+                                lines_c = content_str.split('\n')
+                                if lines_c[0].startswith("```"):
+                                    content_str = "\n".join(lines_c[1:-1]).strip()
+                                else:
+                                    content_str = content_str.strip("`").strip()
+                            
                             try:
-                                content_json = json.loads(parsed_line["content"])
+                                content_json = json.loads(content_str)
                                 if isinstance(content_json, dict) and "mode" in content_json:
                                     n8n_data = content_json
                                     break
@@ -109,8 +118,14 @@ async def start_brief(
                 detail="The automation engine returned an unexpected format. Please check n8n node configuration."
             )
 
-        # Store the current state/schema in next_question or similar
-        db_project.next_question = json.dumps(n8n_data)
+        # If complete immediately
+        if n8n_data.get("mode") == "complete" or n8n_data.get("code") == 333 or str(n8n_data.get("code")) == "333":
+            db_project.status = ProjectStatus.planning
+            db_project.brief_content = n8n_data.get("brief_content", "Brief generated successfully.")
+            db_project.next_question = None
+        else:
+            db_project.next_question = json.dumps(n8n_data)
+            
         db.commit()
         
         return {
@@ -221,8 +236,17 @@ async def submit_brief_step(
                             n8n_data = parsed_line
                             break
                         elif parsed_line.get("type") == "item" and "content" in parsed_line:
+                            content_str = parsed_line["content"].strip()
+                            # Strip markdown code blocks if present
+                            if content_str.startswith("```"):
+                                lines_c = content_str.split('\n')
+                                if lines_c[0].startswith("```"):
+                                    content_str = "\n".join(lines_c[1:-1]).strip()
+                                else:
+                                    content_str = content_str.strip("`").strip()
+                            
                             try:
-                                content_json = json.loads(parsed_line["content"])
+                                content_json = json.loads(content_str)
                                 if isinstance(content_json, dict) and "mode" in content_json:
                                     n8n_data = content_json
                                     break
@@ -238,10 +262,10 @@ async def submit_brief_step(
                 detail="Invalid response format from automation engine."
             )
 
-        # If complete, update project status
-        if n8n_data.get("mode") == "complete":
+        # If complete (either via mode or custom code 333), update project status
+        if n8n_data.get("mode") == "complete" or n8n_data.get("code") == 333 or str(n8n_data.get("code")) == "333":
             db_project.status = ProjectStatus.planning
-            db_project.brief_content = n8n_data.get("brief_content", "Brief generated successfully.")
+            db_project.brief_content = n8n_data.get("brief_content", "Brief generated and sent successfully.")
             db_project.next_question = None
         else:
             db_project.next_question = json.dumps(n8n_data)

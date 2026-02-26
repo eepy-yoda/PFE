@@ -97,7 +97,7 @@ const ClientHome: React.FC = () => {
                         buttonText="Start Now"
                         primary
                         icon={<Sparkles size={32} />}
-                        onClick={() => navigate('/guided-chat')}
+                        onClick={() => navigate('/guided-brief')}
                     />
 
                     <ActionCard

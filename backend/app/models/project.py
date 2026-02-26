@@ -6,6 +6,7 @@ import uuid
 from app.db.session import Base
 
 class ProjectStatus(str, enum.Enum):
+    briefing = "briefing"
     planning = "planning"
     active = "active"
     completed = "completed"
@@ -19,6 +20,11 @@ class Project(Base):
     description = Column(Text, nullable=True)
     status = Column(SQLEnum(ProjectStatus), default=ProjectStatus.planning, nullable=False)
     
+    # Briefing fields
+    brief_history = Column(Text, nullable=True)
+    next_question = Column(Text, nullable=True)
+    brief_content = Column(Text, nullable=True)
+
     # Relationships
     manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     client_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
