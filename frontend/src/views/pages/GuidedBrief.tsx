@@ -45,12 +45,22 @@ const GuidedBrief: React.FC = () => {
     const [finalBrief, setFinalBrief] = useState<string | null>(null);
 
     const scrollRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
     }, [messages, isTyping]);
+
+    useEffect(() => {
+        if (step === 'chat' && !isTyping && !loading) {
+            const timer = setTimeout(() => {
+                inputRef.current?.focus();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [step, isTyping, loading, messages.length]);
 
     const handleInitialSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -179,7 +189,41 @@ const GuidedBrief: React.FC = () => {
                 </header>
 
                 <AnimatePresence mode="wait">
-                    {step === 'initial' && (
+                    {step === 'initial' && loading && (
+                        <motion.div
+                            key="loading"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="bg-[#0f0f0f]/80 backdrop-blur-2xl border border-white/10 rounded-3xl p-16 flex flex-col items-center justify-center space-y-8 shadow-[0_0_50px_-12px_rgba(59,130,246,0.3)] min-h-[450px]"
+                        >
+                            <div className="relative">
+                                <motion.div
+                                    animate={{ rotate: 360 }}
+                                    transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                                    className="w-24 h-24 rounded-full border-b-2 border-r-2 border-primary/40"
+                                />
+                                <motion.div
+                                    animate={{ rotate: -360 }}
+                                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                                    className="w-24 h-24 rounded-full border-t-2 border-l-2 border-primary absolute top-0 left-0"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Bot className="w-10 h-10 text-primary animate-pulse" />
+                                </div>
+                            </div>
+                            <div className="text-center space-y-4">
+                                <h2 className="text-2xl font-bold text-white tracking-tight">Consulting AI Strategist</h2>
+                                <p className="text-gray-400 text-sm max-w-sm leading-relaxed">We're analyzing your project seeds to build a custom briefing experience. This takes a moment...</p>
+                            </div>
+                            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full border border-white/10">
+                                <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Securely connecting to system</span>
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {step === 'initial' && !loading && (
                         <motion.div key="initial" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.05 }} className="bg-[#0f0f0f]/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl p-8 space-y-8">
                             <form onSubmit={handleInitialSubmit} className="space-y-8">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -244,7 +288,7 @@ const GuidedBrief: React.FC = () => {
                             </div>
                             <div className="p-4 border-t border-white/10 bg-white/[0.02]">
                                 <form onSubmit={(e) => { e.preventDefault(); const lastMsg = messages[messages.length - 1]; if (lastMsg && lastMsg.role === 'bot' && lastMsg.type === 'input') handleSendMessage(inputValue, lastMsg.fieldKey); }} className="flex gap-3">
-                                    <input disabled={loading || (messages.length > 0 && messages[messages.length - 1].role === 'user')} type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Type your message..." className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all text-sm" />
+                                    <input ref={inputRef} disabled={loading || (messages.length > 0 && messages[messages.length - 1].role === 'user')} type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Type your message..." className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all text-sm" />
                                     <button disabled={loading || !inputValue.trim()} type="submit" className="w-12 h-12 bg-primary text-white rounded-xl flex items-center justify-center hover:bg-primary/90 disabled:opacity-30 active:scale-95"><Send className="w-5 h-5" /></button>
                                 </form>
                             </div>
