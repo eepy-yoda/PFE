@@ -36,7 +36,14 @@ from supabase import create_client, Client
 from app.core.config import settings
 
 # Initialize Supabase Client for Auth
-supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+# create_client() itself is synchronous and should not block, but guard against
+# misconfigured/empty credentials which would raise immediately.
+try:
+    supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+    print("[Startup] Supabase client initialised.")
+except Exception as _sb_init_err:
+    print(f"[Startup] Warning: Supabase client init failed: {_sb_init_err}")
+    supabase = None  # type: ignore
 
 class UserService:
     supabase = supabase

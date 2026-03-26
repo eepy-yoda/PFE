@@ -1,9 +1,12 @@
 from pydantic import BaseModel, EmailStr
 
+from app.schemas.user import UserRead
+
 class Token(BaseModel):
     access_token: str
     token_type: str
     role: str
+    user: UserRead
 
 class TokenPayload(BaseModel):
     sub: str = None

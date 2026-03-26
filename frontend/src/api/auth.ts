@@ -19,11 +19,30 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     return config;
 });
 
+// Handle 401 Unauthorized globally
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response?.status === 401) {
+            console.warn("Unauthorized! Clearing token and redirecting to login...");
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            // Force reload to login if we are not already there
+            if (!window.location.pathname.includes('/login')) {
+                window.location.href = '/login';
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
 // ── Response shapes ───────────────────────────────────────────────────────────
 
 interface LoginResponse {
     access_token: string;
+    token_type: string;
     role: UserRole;
+    user: CurrentUser;
 }
 
 // ── Auth service (MODEL layer) ────────────────────────────────────────────────
@@ -36,7 +55,7 @@ export const authService = {
             localStorage.setItem('token', response.data.access_token);
             localStorage.setItem(
                 'user',
-                JSON.stringify({ role: response.data.role, email } satisfies CurrentUser)
+                JSON.stringify(response.data.user)
             );
         }
         return response.data;

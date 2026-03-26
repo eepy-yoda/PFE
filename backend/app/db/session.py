@@ -1,14 +1,40 @@
+import warnings
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
 
 if settings.DATABASE_URL.startswith("sqlite"):
+    warnings.warn(
+        "DATABASE_URL is using SQLite. This is only suitable for local development. "
+        "Set DATABASE_URL to a PostgreSQL connection string for staging/production.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
     engine = create_engine(
-        settings.DATABASE_URL, connect_args={"check_same_thread": False}
+        settings.DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        pool_pre_ping=True,
     )
 else:
-    engine = create_engine(settings.DATABASE_URL)
+    # Supabase Transaction Mode (port 6543) requires prepare_threshold=None
+    # for psycopg3 to avoid "DuplicatePreparedStatement" errors.
+    connect_args = {
+        "connect_timeout": 10,       # fail fast if DB is paused/unreachable
+        "options": "-c statement_timeout=0",  # disable Supabase's per-statement timeout
+    }
+    if "pooler.supabase.com" in settings.DATABASE_URL:
+        connect_args["prepare_threshold"] = None
+
+    engine = create_engine(
+        settings.DATABASE_URL,
+        connect_args=connect_args,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,
+        pool_timeout=15,       # give up waiting for a pool slot after 15s
+        pool_recycle=300,      # recycle connections every 5 min to avoid Supabase idle timeouts
+    )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

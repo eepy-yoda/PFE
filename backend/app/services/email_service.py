@@ -15,20 +15,9 @@ class EmailService:
         self.from_email = os.getenv("FROM_EMAIL", self.smtp_user)
 
     def send_verification_email(self, to_email: str, token: str):
-        if not self.smtp_user or not self.smtp_password:
-            print(f"MOCK EMAIL SENT TO {to_email}: Verification Token is {token}")
-            print("To send real emails, please set SMTP_USER and SMTP_PASSWORD in .env")
-            return True
-
-        # Construct verification link
         # In a real app, this would be your frontend URL
         verify_link = f"http://localhost:8000/api/v1/auth/verify/{token}"
-
-        msg = MIMEMultipart()
-        msg['From'] = self.from_email
-        msg['To'] = to_email
-        msg['Subject'] = "Verify your AgencyFlow Account"
-
+        subject = "Verify your AgencyFlow Account"
         body = f"""
         Hello!
         
@@ -37,6 +26,30 @@ class EmailService:
         
         If you didn't create an account, please ignore this email.
         """
+        return self._send(to_email, subject, body)
+
+    def send_notification_email(self, to_email: str, subject: str, body: str):
+        """Generic method to send transactional notification emails"""
+        full_body = f"""
+        Hello,
+
+        You have a new notification on AgencyFlow:
+        
+        {body}
+        
+        Login to your dashboard to see more details.
+        """
+        return self._send(to_email, subject, full_body)
+
+    def _send(self, to_email: str, subject: str, body: str):
+        if not self.smtp_user or not self.smtp_password:
+            print(f"MOCK EMAIL TO {to_email}: [{subject}] {body[:100]}...")
+            return True
+
+        msg = MIMEMultipart()
+        msg['From'] = self.from_email
+        msg['To'] = to_email
+        msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
 
         try:
@@ -48,7 +61,7 @@ class EmailService:
             print(f"REAL EMAIL SENT TO {to_email}")
             return True
         except Exception as e:
-            print(f"Error sending email: {e}")
+            print(f"Error sending email to {to_email}: {e}")
             return False
 
 email_service = EmailService()

@@ -10,61 +10,74 @@ class AuthService:
     @staticmethod
     def authenticate(db: Session, login_data: LoginRequest):
         print(f"\n[LOGIN] Attempt for: {login_data.email}")
-        
+
+        # 1. Try Supabase Auth first (preferred path)
+        supabase_ok = False
         try:
-            # 1. Authenticate with Supabase Auth
+            if user_service.supabase is None:
+                raise RuntimeError("Supabase client not initialised")
             auth_response = user_service.supabase.auth.sign_in_with_password({
                 "email": login_data.email,
                 "password": login_data.password
             })
-            
-            if not auth_response.user:
+            if auth_response.user:
+                supabase_ok = True
+                print(f"[LOGIN] ✅ Supabase Auth Success for ID: {auth_response.user.id}")
+            else:
                 print(f"[LOGIN] ❌ Supabase rejected credentials.")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Incorrect email or password"
                 )
-
-            print(f"[LOGIN] ✅ Supabase Auth Success for ID: {auth_response.user.id}")
-
-            # 2. Get local user info (for roles and status)
-            user = user_service.get_user_by_email(db, login_data.email)
-            if not user:
-                print(f"[LOGIN] ❌ User authenticated in Supabase but missing in public.users!")
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="User profile not found in system."
-                )
-
-            if not user.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Inactive user"
-                )
-            
-            # Note: During development, we check if email is confirmed, 
-            # but we can allow login if it's not confirmed yet to bypass SMTP limits
-            if not auth_response.user.email_confirmed_at:
-                print(f"[LOGIN] ⚠️ Warning: User {login_data.email} logged in without email confirmation.")
-                # Optional: Uncomment if you want to strictly enforce verification
-                # raise HTTPException(status_code=400, detail="Email not verified.")
-            
-            # 3. Create local access token for current session
-            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-            access_token = create_access_token(
-                subject=str(user.id), expires_delta=access_token_expires
-            )
-            print(f"[LOGIN] Success! Role identified as: {user.role}")
-            return Token(
-                access_token=access_token, 
-                token_type="bearer",
-                role=str(user.role.value if hasattr(user.role, 'value') else user.role)
-            )
-
+        except HTTPException:
+            raise  # re-raise explicit 401 from above
         except Exception as e:
-            print(f"[LOGIN] ❌ Unexpected Error: {str(e)}")
-            if "Invalid login credentials" in str(e):
-                 raise HTTPException(status_code=401, detail="Incorrect email or password")
-            raise HTTPException(status_code=500, detail=str(e))
+            err_str = str(e)
+            print(f"[LOGIN] ⚠️ Supabase error: {err_str}")
+            if "Invalid login credentials" in err_str or "invalid_credentials" in err_str:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Incorrect email or password"
+                )
+            # Supabase is unreachable (paused, network issue) — fall back to local auth
+            print(f"[LOGIN] ↩️  Supabase unavailable, falling back to local bcrypt auth.")
+
+        # 2. Get local user record
+        user = user_service.get_user_by_email(db, login_data.email)
+        if not user:
+            print(f"[LOGIN] ❌ No local profile found for {login_data.email}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password"
+            )
+
+        # 3. If Supabase was unavailable, verify password locally
+        if not supabase_ok:
+            if not verify_password(login_data.password, user.hashed_password):
+                print(f"[LOGIN] ❌ Local bcrypt check failed for {login_data.email}")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Incorrect email or password"
+                )
+            print(f"[LOGIN] ✅ Local auth fallback succeeded for {login_data.email}")
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Inactive user"
+            )
+
+        # 4. Create local access token
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            subject=str(user.id), expires_delta=access_token_expires
+        )
+        print(f"[LOGIN] ✅ Token issued. Role: {user.role}")
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            role=str(user.role.value if hasattr(user.role, 'value') else user.role),
+            user=user
+        )
 
 auth_service = AuthService()

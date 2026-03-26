@@ -1,11 +1,39 @@
+// ── RBAC ───────────────────────────────────────────────────────────────────
+
+export interface Permission {
+    id: string;
+    name: string;
+    description?: string;
+}
+
+export interface Role {
+    id: string;
+    name: string;
+    description?: string;
+    is_system: boolean;
+    permissions: Permission[];
+}
+
 // ── Auth ────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'manager' | 'client' | 'worker';
+export type UserRole = 'manager' | 'client' | 'admin' | 'employee';
 
 /** Shape of the user object stored in localStorage and returned by authService */
 export interface CurrentUser {
+    id: string;
     email: string;
+    full_name: string;
     role: UserRole;
+    avatar_url?: string;
+    phone?: string;
+    address?: string;
+    location?: string;
+    company?: string;
+    bio?: string;
+    agency_name?: string;
+    created_at: string;
+    is_active: boolean;
+    assigned_roles?: Role[];
 }
 
 // ── Login ────────────────────────────────────────────────────────────────────
@@ -59,23 +87,117 @@ export interface SignupViewModel {
     togglePasswordVisibility: () => void;
 }
 
-
-/** Shape of the user object stored in localStorage and returned by authService */
-export interface CurrentUser {
-    email: string;
-    role: UserRole;
-}
-
 // ── Projects ─────────────────────────────────────────────────────────────────
 
-export type ProjectStatus = 'active' | 'in_progress' | 'completed' | 'archived';
+export type ProjectStatus = 'briefing' | 'planning' | 'active' | 'completed' | 'on_hold' | 'delivered' | 'archived';
+export type BriefStatus = 'draft' | 'in_progress' | 'interrupted' | 'submitted' | 'clarification_requested' | 'validated' | 'rejected' | 'converted';
+export type PaymentStatus = 'pending' | 'paid' | 'overdue';
 
 /** Shape of a project returned from the backend API */
 export interface Project {
-    id: string | number;
+    id: string;
     name: string;
+    description?: string;
     status: ProjectStatus;
-    created_at: string; // ISO date string from the backend
+    brief_status: BriefStatus;
+    payment_status: PaymentStatus;
+    manager_id: string;
+    client_id?: string;
+    assigned_to?: string;
+    deadline?: string;
+    brief_content?: string;
+    clarification_notes?: string;
+    paid_at?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+// ── Tasks ────────────────────────────────────────────────────────────────────
+
+export type TaskStatus = 'todo' | 'in_progress' | 'submitted' | 'under_ai_review' | 'revision_requested' | 'approved' | 'completed' | 'late';
+export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
+
+export interface Task {
+    id: string;
+    project_id: string;
+    title: string;
+    description?: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    assigned_to?: string;
+    assignee_ids: string[];
+    created_by: string;
+    deadline?: string;
+    order_index: number;
+    project_name?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface TaskSubmission {
+    id: string;
+    task_id: string;
+    submitted_by: string;
+    content?: string;
+    links?: string; // JSON string
+    file_paths?: string; // JSON string
+    ai_score?: number;
+    ai_feedback?: string;
+    is_approved: boolean;
+    reviewed_by?: string;
+    created_at: string;
+}
+
+export interface TaskFeedback {
+    id: string;
+    task_id: string;
+    submission_id?: string;
+    sent_by: string;
+    sent_to: string;
+    message: string;
+    is_revision_request: boolean;
+    created_at: string;
+}
+
+// ── Activity ─────────────────────────────────────────────────────────────────
+
+export interface ActivityLog {
+    id: string;
+    user_id: string;
+    action: string;
+    entity_type: string;
+    entity_id?: string;
+    details?: any;
+    created_at: string;
+}
+
+// ── Notifications ────────────────────────────────────────────────────────────
+
+export type NotificationType =
+    | 'brief_submitted'
+    | 'clarification_requested'
+    | 'project_created'
+    | 'task_assigned'
+    | 'work_submitted'
+    | 'task_late'
+    | 'ai_score_low'
+    | 'revision_requested'
+    | 'content_ready'
+    | 'project_paid'
+    | 'general';
+
+export interface Notification {
+    id: string;
+    user_id: string;
+    type: NotificationType;
+    status: 'unread' | 'read' | 'archived';
+    title: string;
+    body?: string;
+    project_id?: string;
+    task_id?: string;
+    brief_id?: string;
+    created_at: string;
+    read_at?: string;
 }
 
 // ── Dashboard ────────────────────────────────────────────────────────────────
@@ -87,5 +209,8 @@ export interface DashboardViewModel {
     projects: Project[];
     isClient: boolean;
     isManager: boolean;
+    isEmployee: boolean;
+    isAdmin: boolean;
     handleLogout: () => void;
 }
+

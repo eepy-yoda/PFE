@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str
     
     N8N_BRIEF_WEBHOOK_URL: Optional[str] = None
+    N8N_AI_RESUME_WEBHOOK_URL: Optional[str] = None
+    N8N_TASK_REVIEW_WEBHOOK_URL: Optional[str] = None
     N8N_WEBHOOK_SECRET: Optional[str] = None
     
     model_config = SettingsConfigDict(
