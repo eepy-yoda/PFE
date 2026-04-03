@@ -1,4 +1,5 @@
 import { api } from './auth';
+import { supabase } from '../lib/supabaseClient';
 import type { Project, Task, TaskSubmission, TaskFeedback } from '../types';
 
 // ── Manager Dashboard Types ───────────────────────────────────────────────────
@@ -114,6 +115,11 @@ export const projectsService = {
         return response.data;
     },
 
+    async partialDelivery(id: string, taskIds: string[]): Promise<any> {
+        const response = await api.post(`/projects/${id}/partial-delivery`, { task_ids: taskIds });
+        return response.data;
+    },
+
     async getMyBriefHistory(): Promise<Project[]> {
         const response = await api.get<Project[]>('/projects/my-briefs/history');
         return response.data;
@@ -145,13 +151,87 @@ export const projectsService = {
         return response.data;
     },
 
-    async submitTaskWork(taskId: string, submissionData: Partial<TaskSubmission>): Promise<TaskSubmission> {
+    async submitTaskWork(
+        taskId: string,
+        submissionData: { content?: string; links?: string[]; file_paths?: string[] }
+    ): Promise<TaskSubmission> {
         const response = await api.post<TaskSubmission>(`/tasks/${taskId}/submit`, submissionData);
         return response.data;
     },
 
+    /**
+     * Upload a file directly to Supabase Storage and return its public URL.
+     * Files land in the `task-submissions` bucket under `{taskId}/{filename}`.
+     */
+    async uploadSubmissionFile(file: File, taskId: string): Promise<string> {
+        const ext = file.name.split('.').pop();
+        const path = `${taskId}/${Date.now()}.${ext}`;
+        const { error } = await supabase.storage
+            .from('task-submissions')
+            .upload(path, file, { upsert: false });
+        if (error) throw new Error(error.message);
+        const { data } = supabase.storage.from('task-submissions').getPublicUrl(path);
+        return data.publicUrl;
+    },
+
+    /**
+     * Upload with per-file progress callback.
+     * onProgress receives 0-100 percent for the file being uploaded.
+     */
+    async uploadSubmissionFileWithProgress(
+        file: File,
+        taskId: string,
+        onProgress: (pct: number) => void,
+    ): Promise<string> {
+        const ext = file.name.split('.').pop();
+        const path = `${taskId}/${Date.now()}.${ext}`;
+
+        // Use XHR so we can track upload progress
+        const publicBucketUrl = await new Promise<string>((resolve, reject) => {
+            const supabaseUrl = (supabase as any).supabaseUrl as string;
+            const supabaseKey = (supabase as any).supabaseKey as string;
+            const uploadUrl = `${supabaseUrl}/storage/v1/object/task-submissions/${path}`;
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', uploadUrl);
+            xhr.setRequestHeader('Authorization', `Bearer ${supabaseKey}`);
+            xhr.setRequestHeader('x-upsert', 'false');
+
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    onProgress(Math.round((e.loaded / e.total) * 100));
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    const { data } = supabase.storage.from('task-submissions').getPublicUrl(path);
+                    resolve(data.publicUrl);
+                } else {
+                    try {
+                        const err = JSON.parse(xhr.responseText);
+                        reject(new Error(err.message || 'Upload failed'));
+                    } catch {
+                        reject(new Error(`Upload failed with status ${xhr.status}`));
+                    }
+                }
+            };
+
+            xhr.onerror = () => reject(new Error('Network error during upload'));
+            xhr.send(file);
+        });
+
+        return publicBucketUrl;
+    },
+
+    /** Returns all projects the current employee is associated with (via tasks or direct assignment). */
+    async getWorkerProjects(): Promise<Project[]> {
+        const response = await api.get<Project[]>('/projects/');
+        return response.data;
+    },
+
     async getTaskSubmissions(taskId: string): Promise<TaskSubmission[]> {
-        const response = await api.get<TaskSubmission[]>(`/tasks/${taskId}/submissions`);
+        const response = await api.get<TaskSubmission[]>(`/submissions/${taskId}/`);
         return response.data;
     },
 

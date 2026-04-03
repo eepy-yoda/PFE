@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
+import requests as http_client
 
 from app.db.session import get_db
 from app.api.deps import get_current_user, get_current_user_optional
@@ -13,9 +14,13 @@ from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskRead,
     TaskSubmissionCreate, TaskSubmissionRead,
     TaskFeedbackCreate, TaskFeedbackRead,
-    TaskDependencyCreate, AIReviewResult,
+    TaskDependencyCreate, AIReviewResult, SubmissionWebhookResult,
 )
+from app.models.task import SubmissionStatus
 from app.services.task_service import task_service
+from app.services.delivery_service import delivery_service
+from app.models.project import PaymentStatus, PaymentType, DeliveryState
+from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -91,14 +96,28 @@ def update_task(
     task = task_service.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    # Employees can only update status of their own tasks
+    old_payment_status = task.payment_status
+
     if current_user.role == UserRole.employee:
         if task.assigned_to != current_user.id:
             raise HTTPException(status_code=403, detail="Access denied")
         allowed = TaskUpdate(status=task_in.status)
-        return task_service.update_task(db, task, allowed)
-    _require_manager_or_admin(current_user)
-    return task_service.update_task(db, task, task_in)
+        updated_task = task_service.update_task(db, task, allowed)
+    else:
+        _require_manager_or_admin(current_user)
+        updated_task = task_service.update_task(db, task, task_in)
+
+    # Process payment transitions for task-level updates
+    if task_in.payment_status is not None and task_in.payment_status != old_payment_status:
+        updated_task.last_payment_update_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(updated_task)
+        
+        project = db.query(Project).filter(Project.id == updated_task.project_id).first()
+        if project and project.payment_type == PaymentType.task:
+            delivery_service.process_task_payment_update(db, updated_task, project)
+
+    return updated_task
 
 
 # ── SUBMISSIONS ───────────────────────────────────────────────────────────────
@@ -131,7 +150,125 @@ def get_submissions(
         raise HTTPException(status_code=404, detail="Task not found")
     if current_user.role == UserRole.employee and task.assigned_to != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
-    return task_service.get_submissions_for_task(db, task_id)
+    submissions = task_service.get_submissions_for_task(db, task_id)
+
+    if current_user.role == UserRole.client:
+        is_final = getattr(task, 'delivery_state', None) == DeliveryState.final_delivered
+        for sub in submissions:
+            if not is_final:
+                sub.file_paths = None
+                sub.links = None
+            # Always strip internal AI/review data from client-facing responses
+            sub.ai_score = None
+            sub.ai_feedback = None
+            sub.webhook_response = None
+
+    return submissions
+
+
+# ── WORK SUBMISSION WEBHOOK RESULT ────────────────────────────────────────────
+
+@router.post("/submission-webhook-result", response_model=TaskSubmissionRead)
+def receive_submission_webhook_result(
+    result: SubmissionWebhookResult,
+    db: Session = Depends(get_db),
+    x_webhook_secret: Optional[str] = Header(None),
+):
+    """
+    Called by n8n after validating a work submission (async callback pattern).
+
+    Expected payload:
+        { "task_id": "...", "submission_id": "...", "status": "valid"|"invalid",
+          "score": 85, "feedback": "..." }
+
+    Requires X-Webhook-Secret header matching N8N_WEBHOOK_SECRET.
+    """
+    import json as _json
+    from app.models.task import TaskSubmission as TaskSubmissionModel, TaskFeedback as TaskFeedbackModel
+    from app.models.notification import NotificationType
+    from app.services.notification_service import notification_service
+    from datetime import datetime, timezone
+
+    if not settings.N8N_WEBHOOK_SECRET or x_webhook_secret != settings.N8N_WEBHOOK_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid or missing webhook secret")
+
+    submission = db.query(TaskSubmissionModel).filter(
+        TaskSubmissionModel.id == result.submission_id
+    ).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    task = db.query(Task).filter(Task.id == result.task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Store raw webhook response
+    submission.webhook_response = _json.dumps({
+        "status": result.status,
+        "score": result.score,
+        "feedback": result.feedback,
+    })
+    if result.score is not None:
+        submission.ai_score = result.score
+    if result.feedback:
+        submission.ai_feedback = result.feedback
+
+    from app.models.user import User as UserModel
+    from app.models.project import Project as ProjectModel
+    employee = db.query(UserModel).filter(UserModel.id == submission.submitted_by).first()
+    project = db.query(ProjectModel).filter(ProjectModel.id == task.project_id).first()
+    employee_name = employee.full_name if employee else "Employee"
+    project_name = project.name if project else "Unknown Project"
+
+    is_valid = result.status.lower() == "valid"
+
+    if is_valid:
+        submission.submission_status = SubmissionStatus.validated
+        submission.is_approved = True
+        task.status = TaskStatus.approved
+
+        if task.created_by:
+            score_label = f" (score: {result.score}/100)" if result.score is not None else ""
+            notification_service.create(
+                db,
+                user_id=task.created_by,
+                title=f"Submission validated — {task.title}",
+                notification_type=NotificationType.work_submitted,
+                body=(
+                    f"{employee_name}'s submission for '{task.title}' in '{project_name}' "
+                    f"validated{score_label} at "
+                    f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}."
+                ),
+                task_id=task.id,
+                project_id=task.project_id,
+            )
+    else:
+        submission.submission_status = SubmissionStatus.rejected
+        task.status = TaskStatus.revision_requested
+
+        if result.feedback and task.assigned_to:
+            fb = TaskFeedbackModel(
+                task_id=task.id,
+                submission_id=submission.id,
+                sent_by=task.created_by,
+                sent_to=task.assigned_to,
+                message=result.feedback,
+                is_revision_request=True,
+            )
+            db.add(fb)
+            notification_service.create(
+                db,
+                user_id=task.assigned_to,
+                title=f"Revision requested — {task.title}",
+                notification_type=NotificationType.revision_requested,
+                body=result.feedback[:200],
+                task_id=task.id,
+                project_id=task.project_id,
+            )
+
+    db.commit()
+    db.refresh(submission)
+    return submission
 
 
 # ── AI REVIEW CALLBACK ────────────────────────────────────────────────────────
@@ -230,6 +367,8 @@ def get_task_feedbacks(
     task = task_service.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    if current_user.role == UserRole.client:
+        raise HTTPException(status_code=403, detail="Access denied")
     if current_user.role == UserRole.employee and task.assigned_to != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
     feedbacks = db.query(TaskFeedbackModel).filter(

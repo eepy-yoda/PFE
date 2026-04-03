@@ -226,7 +226,7 @@ const ClientDashboard: React.FC = () => {
                                                     </span>
                                                     <span className="text-gray-300 dark:text-gray-700">·</span>
                                                     <span className="text-[10px] text-gray-400 dark:text-gray-500">{new Date(project.created_at).toLocaleDateString()}</span>
-                                                    {project.payment_status === 'paid' && (
+                                                    {project.payment_status === 'fully_paid' && (
                                                         <>
                                                             <span className="text-gray-300 dark:text-gray-700">·</span>
                                                             <span className="text-[10px] font-bold text-green-500">Paid</span>

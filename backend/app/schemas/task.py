@@ -2,7 +2,8 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional, List, Any
 from uuid import UUID
 from datetime import datetime
-from app.models.task import TaskStatus
+from app.models.task import TaskStatus, SubmissionStatus
+from app.models.project import PaymentStatus, DeliveryState
 
 
 class TaskBase(BaseModel):
@@ -28,6 +29,9 @@ class TaskUpdate(BaseModel):
     deadline: Optional[datetime] = None
     priority: Optional[str] = None
     order_index: Optional[int] = None
+    payment_status: Optional[PaymentStatus] = None
+    amount_paid: Optional[float] = None
+    delivery_state: Optional[DeliveryState] = None
 
 
 class TaskRead(TaskBase):
@@ -40,6 +44,13 @@ class TaskRead(TaskBase):
     created_at: datetime
     updated_at: datetime
     project_name: Optional[str] = None  # populated via Task.project_name property
+    project_brief: Optional[str] = None # populated via Task.project_brief property
+    payment_status: Optional[PaymentStatus] = None
+    amount_paid: Optional[float] = None
+    final_delivered_at: Optional[datetime] = None
+    watermarked_delivered_at: Optional[datetime] = None
+    delivery_state: Optional[DeliveryState] = None
+    last_payment_update_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -60,6 +71,9 @@ class TaskSubmissionRead(BaseModel):
     content: Optional[str] = None
     links: Optional[str] = None
     file_paths: Optional[str] = None
+    submission_status: SubmissionStatus = SubmissionStatus.pending
+    brief_snapshot: Optional[str] = None
+    webhook_response: Optional[str] = None
     ai_score: Optional[float] = None
     ai_feedback: Optional[str] = None
     is_approved: bool
@@ -105,3 +119,22 @@ class AIReviewResult(BaseModel):
     submission_id: UUID
     score: float  # 0-100
     feedback: str
+
+
+class SubmissionWebhookResult(BaseModel):
+    """Callback payload from n8n after work submission validation.
+
+    n8n must POST this to /tasks/submission-webhook-result with:
+    {
+        "task_id": "...",
+        "submission_id": "...",
+        "status": "valid" | "invalid",
+        "score": 85,               // optional, 0-100
+        "feedback": "Good work"    // optional, populated on invalid
+    }
+    """
+    task_id: UUID
+    submission_id: UUID
+    status: str  # "valid" or "invalid"
+    score: Optional[float] = None
+    feedback: Optional[str] = None

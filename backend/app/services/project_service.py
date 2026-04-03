@@ -17,11 +17,22 @@ class ProjectService:
 
     @staticmethod
     def get_projects(db: Session, user_id: UUID, role: str):
+        from sqlalchemy import or_
+        from app.models.task import Task
         # We allow any manager or admin to see all projects
         if str(role) in ["UserRole.admin", "UserRole.manager", "admin", "manager"]:
             return db.query(Project).all()
         if str(role) == "employee" or str(role) == "UserRole.employee":
-            return db.query(Project).filter(Project.assigned_to == user_id).all()
+            # Include projects where employee is the project-level assignee
+            # AND projects where they have at least one assigned task
+            project_ids_via_tasks = [
+                pid for (pid,) in db.query(Task.project_id)
+                .filter(Task.assigned_to == user_id)
+                .distinct().all()
+            ]
+            return db.query(Project).filter(
+                or_(Project.assigned_to == user_id, Project.id.in_(project_ids_via_tasks))
+            ).all()
         return db.query(Project).filter(Project.client_id == user_id).all()
 
     @staticmethod

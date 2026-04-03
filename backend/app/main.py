@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
-from app.api.routes import auth, users, projects, brief, tasks, notifications, management
+from app.api.routes import auth, users, projects, brief, tasks, notifications, management, submissions, image_callbacks
 from app.core.config import settings
 from app.db.session import engine, Base, SessionLocal
-from app.models import user, project, task, notification, rbac, activity # Ensure models are imported for Base.metadata
+from app.models import user, project, task, notification, rbac, activity, workflow_image_callback # Ensure models are imported for Base.metadata
 from app.models.task import Task, TaskStatus
 from app.models.notification import NotificationType
 from app.services.notification_service import notification_service
@@ -31,6 +31,49 @@ def _run_startup_db_tasks():
         ("briefstatus enum: interrupted",
          "ALTER TYPE briefstatus ADD VALUE IF NOT EXISTS 'interrupted'",
          True),  # PostgreSQL only
+        ("task_submissions.submissionstatus type",
+         "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'submissionstatus') THEN CREATE TYPE submissionstatus AS ENUM ('pending', 'validated', 'rejected'); END IF; END $$",
+         True),
+        ("task_submissions.submission_status",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS submission_status submissionstatus DEFAULT 'pending'",
+         False),
+        ("task_submissions.brief_snapshot",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS brief_snapshot TEXT",
+         False),
+        ("task_submissions.webhook_response",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS webhook_response TEXT",
+         False),
+        ("task_submissions.attempt_number",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS attempt_number INTEGER NOT NULL DEFAULT 1",
+         False),
+        ("tasks: reset under_review to submitted",
+         "UPDATE tasks SET status = 'submitted' WHERE status = 'under_review'",
+         False),
+        ("task_submissions.ai_analysis_result",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS ai_analysis_result TEXT",
+         False),
+        ("workflow_image_callbacks table",
+         """CREATE TABLE IF NOT EXISTS workflow_image_callbacks (
+             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             callback_token TEXT UNIQUE NOT NULL,
+             project_id UUID NOT NULL REFERENCES projects(id),
+             task_id UUID REFERENCES tasks(id),
+             submission_id UUID REFERENCES task_submissions(id),
+             file_type TEXT NOT NULL,
+             status TEXT NOT NULL DEFAULT 'pending_image',
+             source TEXT DEFAULT 'n8n',
+             error_message TEXT,
+             storage_bucket TEXT,
+             storage_path TEXT,
+             expires_at TIMESTAMPTZ,
+             processed_at TIMESTAMPTZ,
+             created_at TIMESTAMPTZ DEFAULT now(),
+             updated_at TIMESTAMPTZ DEFAULT now()
+         )""",
+         False),
+        ("workflow_image_callbacks.callback_token index",
+         "CREATE UNIQUE INDEX IF NOT EXISTS ix_workflow_image_callbacks_token ON workflow_image_callbacks (callback_token)",
+         False),
     ]
     for label, sql, pg_only in migrations:
         try:
@@ -122,8 +165,10 @@ app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["u
 app.include_router(projects.router, prefix=f"{settings.API_V1_STR}/projects", tags=["projects"])
 app.include_router(brief.router, prefix=f"{settings.API_V1_STR}/brief", tags=["brief"])
 app.include_router(tasks.router, prefix=f"{settings.API_V1_STR}/tasks", tags=["tasks"])
+app.include_router(submissions.router, prefix=f"{settings.API_V1_STR}", tags=["submissions"])
 app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["notifications"])
 app.include_router(management.router, prefix=f"{settings.API_V1_STR}/management", tags=["management"])
+app.include_router(image_callbacks.router, prefix=f"{settings.API_V1_STR}", tags=["webhooks"])
 
 @app.get("/")
 def root():

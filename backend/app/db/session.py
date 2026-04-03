@@ -21,7 +21,7 @@ else:
     # for psycopg3 to avoid "DuplicatePreparedStatement" errors.
     connect_args = {
         "connect_timeout": 10,       # fail fast if DB is paused/unreachable
-        "options": "-c statement_timeout=0",  # disable Supabase's per-statement timeout
+        "options": "-c statement_timeout=0 -c row_security=off",  # disable Supabase's per-statement timeout + bypass RLS for backend service role
     }
     if "pooler.supabase.com" in settings.DATABASE_URL:
         connect_args["prepare_threshold"] = None

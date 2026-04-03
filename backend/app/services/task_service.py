@@ -4,12 +4,25 @@ from datetime import datetime, timezone
 from uuid import UUID
 from typing import List, Optional
 
-from app.models.task import Task, TaskStatus, TaskSubmission, TaskFeedback, TaskDependency
+from app.models.task import Task, TaskStatus, TaskSubmission, SubmissionStatus, TaskFeedback, TaskDependency
 from app.models.project import Project
 from app.models.notification import NotificationType
 from app.schemas.task import TaskCreate, TaskUpdate, TaskSubmissionCreate, TaskFeedbackCreate, TaskDependencyCreate
+from app.schemas.submission import SubmissionCreateRequest
 from app.services.notification_service import notification_service
 from app.services.activity_service import activity_service
+
+
+def _send_submission_webhook(*args, **kwargs) -> Optional[dict]:
+    """Deprecated stub — logic moved to submission_service._send_submission_webhook."""
+    return None
+
+
+
+# NOTE: The webhook helper previously located here has been extracted to
+# app/services/submission_service.py :: _send_submission_webhook()
+# task_service.submit_work() now delegates to submission_service.create_submission().
+
 
 
 class TaskService:
@@ -67,7 +80,8 @@ class TaskService:
             setattr(db_task, field, value)
         
         # Log activity
-        activity_service.create_log(db, user_id=db_task.created_by, action="update_task", entity_type="task", entity_id=db_task.id, details=update_data)
+        log_data = task_in.model_dump(exclude_unset=True, mode='json')
+        activity_service.create_log(db, user_id=db_task.created_by, action="update_task", entity_type="task", entity_id=db_task.id, details=log_data)
         
         db.commit()
         db.refresh(db_task)
@@ -91,62 +105,25 @@ class TaskService:
 
     @staticmethod
     def submit_work(db: Session, submission_in: TaskSubmissionCreate, submitted_by: UUID) -> TaskSubmission:
-        db_submission = TaskSubmission(
+        """
+        Delegates to submission_service.create_submission (single source of truth).
+        Kept here for backward-compat with the old /tasks/{id}/submit route.
+        """
+        from app.services.submission_service import submission_service as _svc
+
+        req = SubmissionCreateRequest(
             task_id=submission_in.task_id,
-            submitted_by=submitted_by,
             content=submission_in.content,
-            links=json.dumps(submission_in.links) if submission_in.links else None,
-            file_paths=json.dumps(submission_in.file_paths) if submission_in.file_paths else None,
+            links=submission_in.links,
+            file_paths=submission_in.file_paths,
         )
-        db.add(db_submission)
+        return _svc.create_submission(db, req, submitted_by)
 
-        # Update task status
-        task = db.query(Task).filter(Task.id == submission_in.task_id).first()
-        if task:
-            task.status = TaskStatus.submitted
-            
-        # Log activity
-        activity_service.create_log(db, user_id=submitted_by, action="submit_work", entity_type="task", entity_id=submission_in.task_id)
+    @staticmethod
+    def _submit_work_ORIGINAL_REMOVED(*_args, **_kwargs) -> None:
+        """Archived — see submission_service.py :: SubmissionService.create_submission()."""
 
-        db.commit()
-        db.refresh(db_submission)
 
-        # Trigger AI Review Webhook if configured
-        from app.core.config import settings
-        import requests
-        if settings.N8N_TASK_REVIEW_WEBHOOK_URL:
-            try:
-                # Update status to under_ai_review
-                if task:
-                    task.status = TaskStatus.under_ai_review
-                    db.commit()
-
-                payload = {
-                    "task_id": str(task.id) if task else None,
-                    "submission_id": str(db_submission.id),
-                    "full_name": str(db_submission.submitted_by), # Simplification, could fetch user
-                    "content": db_submission.content,
-                    "links": submission_in.links,
-                    "timestamp": datetime.now().isoformat()
-                }
-                headers = {"X-Webhook-Secret": settings.N8N_WEBHOOK_SECRET or ""}
-                requests.post(settings.N8N_TASK_REVIEW_WEBHOOK_URL, json=payload, headers=headers, timeout=5)
-            except Exception as e:
-                print(f"Failed to trigger AI review webhook: {e}")
-
-        # Notify the manager who created the task
-        if task and task.created_by:
-            notification_service.create(
-                db,
-                user_id=task.created_by,
-                title="Work submitted on a task",
-                notification_type=NotificationType.work_submitted,
-                body=f"New submission for task: {task.title}",
-                task_id=task.id,
-                project_id=task.project_id,
-            )
-
-        return db_submission
 
     @staticmethod
     def get_submissions_for_task(db: Session, task_id: UUID) -> List[TaskSubmission]:

@@ -58,6 +58,10 @@ const App: React.FC = () => {
                             element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>}
                         />
                         <Route
+                            path="/projects/:id"
+                            element={<ProtectedRoute><ProjectDetail /></ProtectedRoute>}
+                        />
+                        <Route
                             path="/profile"
                             element={<ProtectedRoute><Profile /></ProtectedRoute>}
                         />

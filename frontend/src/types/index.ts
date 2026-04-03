@@ -91,7 +91,9 @@ export interface SignupViewModel {
 
 export type ProjectStatus = 'briefing' | 'planning' | 'active' | 'completed' | 'on_hold' | 'delivered' | 'archived';
 export type BriefStatus = 'draft' | 'in_progress' | 'interrupted' | 'submitted' | 'clarification_requested' | 'validated' | 'rejected' | 'converted';
-export type PaymentStatus = 'pending' | 'paid' | 'overdue';
+export type PaymentStatus = 'unpaid' | 'partially_paid' | 'fully_paid' | 'pending' | 'paid' | 'overdue';
+export type PaymentType = 'project' | 'task';
+export type DeliveryState = 'not_delivered' | 'watermark_delivered' | 'final_delivered';
 
 /** Shape of a project returned from the backend API */
 export interface Project {
@@ -100,13 +102,17 @@ export interface Project {
     description?: string;
     status: ProjectStatus;
     brief_status: BriefStatus;
+    payment_type: PaymentType;
     payment_status: PaymentStatus;
+    total_project_price?: number;
+    amount_paid?: number;
     manager_id: string;
     client_id?: string;
     assigned_to?: string;
     deadline?: string;
     brief_content?: string;
     clarification_notes?: string;
+    payment_updated_at?: string;
     paid_at?: string;
     created_at: string;
     updated_at: string;
@@ -130,8 +136,40 @@ export interface Task {
     deadline?: string;
     order_index: number;
     project_name?: string;
+    project_brief?: string;
+    payment_status?: PaymentStatus;
+    amount_paid?: number;
+    delivery_state?: DeliveryState;
+    final_delivered_at?: string;
+    watermarked_delivered_at?: string;
+    last_payment_update_at?: string;
     created_at: string;
     updated_at: string;
+}
+
+export type SubmissionStatus = 'pending' | 'validated' | 'rejected';
+
+// ── AI Analysis Result ────────────────────────────────────────────────────────
+
+export type AIAnalysisStatus = 'aligns' | 'does_not_align' | 'needs_revision' | 'error';
+
+export interface AIChecks {
+    subject_concept: string;
+    brand_message: string;
+    target_audience: string;
+    style_mood: string;
+    colors: string;
+    composition: string;
+    required_elements: string;
+}
+
+/** Normalized AI analysis stored as JSON string in TaskSubmission.ai_analysis_result */
+export interface AIAnalysisResult {
+    status: AIAnalysisStatus;
+    summary: string;
+    score: number;
+    checks: AIChecks;
+    feedback: string[];
 }
 
 export interface TaskSubmission {
@@ -139,10 +177,17 @@ export interface TaskSubmission {
     task_id: string;
     submitted_by: string;
     content?: string;
-    links?: string; // JSON string
-    file_paths?: string; // JSON string
+    links?: string;           // JSON string
+    file_paths?: string;      // JSON string
+    watermarked_file_paths?: string; // JSON string (Public URLs)
+    watermark_file_path?: string;    // Raw storage path (e.g. task-submissions/preview/...)
+    submission_status: SubmissionStatus;
+    brief_snapshot?: string;  // Brief content captured at submission time
+    webhook_response?: string;      // Raw JSON from n8n
+    ai_analysis_result?: string;    // Normalized JSON: AIAnalysisResult
     ai_score?: number;
     ai_feedback?: string;
+    attempt_number: number;
     is_approved: boolean;
     reviewed_by?: string;
     created_at: string;

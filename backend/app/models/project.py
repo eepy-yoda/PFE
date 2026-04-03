@@ -1,5 +1,5 @@
 import enum
-from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, Text, Boolean
+from sqlalchemy import Column, String, DateTime, ForeignKey, Enum as SQLEnum, Text, Boolean, Float
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -28,11 +28,22 @@ class BriefStatus(str, enum.Enum):
     converted = "converted"
 
 
-class PaymentStatus(str, enum.Enum):
-    pending = "pending"
-    paid = "paid"
-    overdue = "overdue"
+class PaymentType(str, enum.Enum):
+    project = "project"
+    task = "task"
 
+class PaymentStatus(str, enum.Enum):
+    unpaid = "unpaid"
+    partially_paid = "partially_paid"
+    fully_paid = "fully_paid"
+    pending = "pending"  # legacy
+    paid = "paid"  # legacy
+    overdue = "overdue"  # legacy
+
+class DeliveryState(str, enum.Enum):
+    not_delivered = "not_delivered"
+    watermark_delivered = "watermark_delivered"
+    final_delivered = "final_delivered"
 
 class Project(Base):
     __tablename__ = "projects"
@@ -51,8 +62,12 @@ class Project(Base):
     clarification_notes = Column(Text, nullable=True)
 
     # Payment
-    payment_status = Column(SQLEnum(PaymentStatus, name="paymentstatus", create_type=True), default=PaymentStatus.pending)
+    payment_type = Column(SQLEnum(PaymentType, name="paymenttype", create_type=True), default=PaymentType.project)
+    payment_status = Column(SQLEnum(PaymentStatus, name="paymentstatus", create_type=True), default=PaymentStatus.unpaid)
+    total_project_price = Column(Float, nullable=True, default=0.0)
+    amount_paid = Column(Float, nullable=True, default=0.0)
     paid_at = Column(DateTime(timezone=True), nullable=True)
+    payment_updated_at = Column(DateTime(timezone=True), nullable=True)
 
     # Timing
     deadline = Column(DateTime(timezone=True), nullable=True)

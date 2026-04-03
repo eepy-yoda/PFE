@@ -2,7 +2,7 @@ from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 from datetime import datetime
 from typing import Optional, List
-from app.models.project import ProjectStatus, BriefStatus, PaymentStatus
+from app.models.project import ProjectStatus, BriefStatus, PaymentStatus, PaymentType
 
 class ProjectBase(BaseModel):
     name: str
@@ -11,6 +11,8 @@ class ProjectBase(BaseModel):
     client_id: Optional[UUID] = None
     assigned_to: Optional[UUID] = None
     deadline: Optional[datetime] = None
+    payment_type: PaymentType = PaymentType.project
+    total_project_price: Optional[float] = 0.0
 
 class ProjectCreate(ProjectBase):
     pass
@@ -22,12 +24,18 @@ class ProjectUpdate(BaseModel):
     client_id: Optional[UUID] = None
     assigned_to: Optional[UUID] = None
     deadline: Optional[datetime] = None
+    payment_type: Optional[PaymentType] = None
+    total_project_price: Optional[float] = None
+    amount_paid: Optional[float] = None
+    payment_status: Optional[PaymentStatus] = None
 
 class ProjectRead(ProjectBase):
     id: UUID
-    manager_id: UUID
-    brief_status: BriefStatus
-    payment_status: PaymentStatus
+    manager_id: Optional[UUID] = None
+    brief_status: Optional[BriefStatus] = BriefStatus.draft
+    payment_status: Optional[PaymentStatus] = PaymentStatus.unpaid
+    amount_paid: Optional[float] = 0.0
+    payment_updated_at: Optional[datetime] = None
     clarification_notes: Optional[str] = None
     brief_content: Optional[str] = None
     paid_at: Optional[datetime] = None

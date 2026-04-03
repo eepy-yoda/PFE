@@ -25,22 +25,12 @@ class AuthService:
                 print(f"[LOGIN] ✅ Supabase Auth Success for ID: {auth_response.user.id}")
             else:
                 print(f"[LOGIN] ❌ Supabase rejected credentials.")
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Incorrect email or password"
-                )
-        except HTTPException:
-            raise  # re-raise explicit 401 from above
         except Exception as e:
             err_str = str(e)
-            print(f"[LOGIN] ⚠️ Supabase error: {err_str}")
-            if "Invalid login credentials" in err_str or "invalid_credentials" in err_str:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Incorrect email or password"
-                )
-            # Supabase is unreachable (paused, network issue) — fall back to local auth
-            print(f"[LOGIN] ↩️  Supabase unavailable, falling back to local bcrypt auth.")
+            print(f"[LOGIN] ⚠️ Supabase Check failed/skipped: {err_str}")
+            # Supabase might reject the creds (401), be unreachable (paused), or IDs might mismatch.
+            # We will now ALWAYS fall back to checking the local public.users table if Step 1 doesn't clear.
+            print(f"[LOGIN] ↩️  Falling back to local bcrypt auth for robustness.")
 
         # 2. Get local user record
         user = user_service.get_user_by_email(db, login_data.email)
