@@ -1071,7 +1071,7 @@ const ProjectDetail: React.FC = () => {
                                                                     {paths.map((url, i) => (
                                                                         <a key={i} href={url} target="_blank" rel="noopener noreferrer"
                                                                            className="block rounded-xl overflow-hidden border border-violet-100 dark:border-violet-800/30 hover:opacity-90 transition-opacity">
-                                                                            <img src={url} alt={`submission-${i + 1}`} className="w-full h-32 object-cover" />
+                                                                            <img src={url} alt={`submission-${i + 1}`} className="w-full object-contain" />
                                                                         </a>
                                                                     ))}
                                                                 </div>
@@ -1246,7 +1246,7 @@ const ProjectDetail: React.FC = () => {
                                     <p className="text-gray-400 dark:text-gray-500 font-bold">No files available yet.</p>
                                 </div>
                             ) : (() => {
-                                const sub = clientDeliverableModal.subs[clientDeliverableModal.subs.length - 1];
+                                const sub = clientDeliverableModal.subs[0]; // subs are newest-first; watermark is on the latest approved submission
                                 return (
                                     <div className="space-y-4">
                                         {sub.content && (
@@ -1263,21 +1263,23 @@ const ProjectDetail: React.FC = () => {
                                                 const finalPaths: string[] = (isFinal && sub.file_paths) ? JSON.parse(sub.file_paths) : [];
                                                 
                                                 // ── WATERMARK PATHS LOGIC ──
-                                                // Prefer the new singular watermark_file_path (raw path) if available
                                                 let watermarkPaths: string[] = [];
                                                 if (!isFinal) {
-                                                    const rawPath = sub.watermark_file_path;
-                                                    if (rawPath) {
-                                                        const parts = rawPath.split('/');
+                                                    // Primary: watermarked_file_paths holds the pre-built public URL
+                                                    // stored by the backend as JSON array, e.g. ["https://...supabase.../preview/file.png"]
+                                                    if (sub.watermarked_file_paths) {
+                                                        try {
+                                                            const parsed = JSON.parse(sub.watermarked_file_paths);
+                                                            if (Array.isArray(parsed)) watermarkPaths = parsed.filter(Boolean);
+                                                        } catch { watermarkPaths = []; }
+                                                    }
+                                                    // Fallback: reconstruct URL from raw storage path
+                                                    if (watermarkPaths.length === 0 && sub.watermark_file_path) {
+                                                        const parts = sub.watermark_file_path.split('/');
                                                         const bucket = parts[0];
                                                         const subPath = parts.slice(1).join('/');
                                                         const { data } = supabase.storage.from(bucket).getPublicUrl(subPath);
-                                                        watermarkPaths = [data.publicUrl];
-                                                    } else if (sub.watermarked_file_paths) {
-                                                        // Fallback to existing plural URLs
-                                                        try {
-                                                            watermarkPaths = JSON.parse(sub.watermarked_file_paths);
-                                                        } catch { watermarkPaths = []; }
+                                                        if (data.publicUrl) watermarkPaths = [data.publicUrl];
                                                     }
                                                 }
 
@@ -1308,7 +1310,7 @@ const ProjectDetail: React.FC = () => {
                                                             {displayPaths.map((url, i) => (
                                                                 <a key={i} href={url} target="_blank" rel="noopener noreferrer"
                                                                    className="block rounded-2xl overflow-hidden border border-gray-100 dark:border-gray-700 hover:opacity-90 transition-opacity shadow-sm">
-                                                                    <img src={url} alt={`deliverable-${i + 1}`} className="w-full h-48 object-cover" />
+                                                                    <img src={url} alt={`deliverable-${i + 1}`} className="w-full object-contain" />
                                                                 </a>
                                                             ))}
                                                         </div>

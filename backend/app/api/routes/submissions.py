@@ -129,6 +129,7 @@ def list_submissions(
                 sub.links = None
             if not is_watermark and not is_final:
                 sub.watermarked_file_paths = None
+                sub.watermark_file_path = None  # gate both preview fields together
 
     return submissions
 

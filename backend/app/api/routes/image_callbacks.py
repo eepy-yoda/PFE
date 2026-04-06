@@ -97,22 +97,42 @@ async def receive_image_result(
         if not body:
             raise HTTPException(status_code=422, detail="n8n payload array is empty.")
         first = body[0]
-        if not isinstance(first, dict) or "Key" not in first:
+        if not isinstance(first, dict):
             raise HTTPException(
                 status_code=422,
-                detail="n8n payload missing 'Key' field in first element. "
-                       f"Received: {first!r}",
+                detail=f"n8n payload first element is not an object. Received: {first!r}",
             )
-        image_path = first["Key"]
-        if not image_path or not isinstance(image_path, str):
-            raise HTTPException(status_code=422, detail="n8n 'Key' field is empty or not a string.")
-        logger.info("[ImageCallback] Extracted path from n8n Key field  hint=%s  path=%r", hint, image_path)
+        # Case-insensitive lookup: n8n may send "Key", "key", or "KEY"
+        image_path = first.get("Key") or first.get("key") or first.get("KEY")
+        if not image_path:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "n8n payload missing 'Key' field in first element. "
+                    f"Received keys: {list(first.keys())!r}"
+                ),
+            )
+        if not isinstance(image_path, str) or not image_path.strip():
+            raise HTTPException(
+                status_code=422,
+                detail="n8n 'Key' field is empty or not a string.",
+            )
+        image_path = image_path.strip()
+        logger.info(
+            "[ImageCallback] Extracted path from n8n Key field  hint=%s  path=%r",
+            hint, image_path,
+        )
 
     # Legacy format: {"image_path": "bucket/path/file.png"}
     elif isinstance(body, dict):
         image_path = body.get("image_path")
+        if image_path and isinstance(image_path, str):
+            image_path = image_path.strip()
         if image_path:
-            logger.info("[ImageCallback] Extracted path from legacy image_path field  hint=%s  path=%r", hint, image_path)
+            logger.info(
+                "[ImageCallback] Extracted path from legacy image_path field  hint=%s  path=%r",
+                hint, image_path,
+            )
 
     if not image_path:
         raise HTTPException(

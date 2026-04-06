@@ -103,9 +103,24 @@ class ImageCallbackService:
         """
         Build the full callback URL to include in the n8n webhook payload.
         Requires APP_BASE_URL in settings (e.g. https://api.example.com).
+
+        Raises RuntimeError if APP_BASE_URL is not configured — a relative
+        URL is useless to n8n and would cause the callback to never arrive.
         """
         base = (getattr(settings, "APP_BASE_URL", None) or "").rstrip("/")
-        return f"{base}{settings.API_V1_STR}/webhooks/n8n/image-result/{token}"
+        if not base:
+            logger.critical(
+                "[ImageCallback] APP_BASE_URL is not set in settings. "
+                "n8n will receive a relative callback URL and can never call back. "
+                "Set APP_BASE_URL=https://your-api-domain.com in your .env file."
+            )
+            raise RuntimeError(
+                "APP_BASE_URL must be configured before watermark callbacks can work. "
+                "Set APP_BASE_URL=https://your-api-domain.com in your .env file."
+            )
+        url = f"{base}{settings.API_V1_STR}/webhooks/n8n/image-result/{token}"
+        logger.debug("[ImageCallback] Built callback URL: %s", url)
+        return url
 
     # ── Phase 2: process incoming binary from n8n ─────────────────────────────
 
@@ -118,13 +133,52 @@ class ImageCallbackService:
     ) -> WorkflowImageCallback:
         """
         Process a callback where n8n has already uploaded the image to Supabase
-        and is just providing the storage path (key).
+        and is providing the storage path (key).
 
-        The image_path should be in format: 'bucket/folder/filename.ext'
+        HARDENED:
+          - Early path validation before any DB access
+          - Idempotency: already-completed callbacks return safely
+          - Full cross-validation: submission → task → project relationships verified
+          - Watermarked-preview aborts loudly if submission is missing
+          - record.status = "completed" is set atomically INSIDE the commit try-block
+          - post-write verification after db.refresh(submission)
+          - explicit db.rollback() on commit failure before the error-marking commit
         """
         hint = _token_hint(token)
 
-        # 1. Token validation
+        # ── 0. Early path validation ──────────────────────────────────────────
+        if not image_path or not isinstance(image_path, str):
+            logger.error(
+                "[ImageCallback] image_path is empty or not a string  hint=%s  raw=%r",
+                hint, image_path,
+            )
+            raise HTTPException(status_code=422, detail="image_path must be a non-empty string.")
+
+        image_path = image_path.strip()
+
+        if image_path.lower().startswith(("http://", "https://")):
+            logger.error(
+                "[ImageCallback] image_path looks like a URL, expected a storage path  "
+                "hint=%s  path=%r",
+                hint, image_path,
+            )
+            raise HTTPException(
+                status_code=422,
+                detail="image_path must be a storage path (bucket/key), not an external URL.",
+            )
+
+        if "/" not in image_path:
+            logger.error(
+                "[ImageCallback] image_path has no '/' separator — cannot split bucket/key  "
+                "hint=%s  path=%r",
+                hint, image_path,
+            )
+            raise HTTPException(
+                status_code=422,
+                detail="image_path must contain at least one '/' (expected: bucket/object-key).",
+            )
+
+        # ── 1. Token lookup ───────────────────────────────────────────────────
         record = (
             db.query(WorkflowImageCallback)
             .filter(WorkflowImageCallback.callback_token == token)
@@ -133,66 +187,148 @@ class ImageCallbackService:
 
         if not record:
             logger.warning("[ImageCallback] Unknown token  hint=%s", hint)
-            raise HTTPException(status_code=404, detail="Callback token not found")
+            raise HTTPException(status_code=404, detail="Callback token not found.")
+
+        logger.info(
+            "[ImageCallback] Token resolved  hint=%s  record_id=%s  status=%s  "
+            "file_type=%s  submission_id=%s  task_id=%s  project_id=%s",
+            hint, record.id, record.status, record.file_type,
+            record.submission_id, record.task_id, record.project_id,
+        )
+
+        # ── 2. Idempotency: already completed ────────────────────────────────
+        if record.status == "completed":
+            logger.info(
+                "[ImageCallback] Already completed — returning idempotent success  "
+                "hint=%s  stored_path=%s  incoming_path=%s",
+                hint, record.storage_path, image_path,
+            )
+            db.refresh(record)
+            return record
 
         if record.status != "pending_image":
-            logger.warning("[ImageCallback] Token reuse attempt  hint=%s  status=%s", hint, record.status)
-            raise HTTPException(status_code=409, detail="Callback has already been processed")
+            logger.warning(
+                "[ImageCallback] Token in non-processable state  hint=%s  status=%s",
+                hint, record.status,
+            )
+            raise HTTPException(
+                status_code=409,
+                detail=f"Callback is not in a processable state (current: {record.status}).",
+            )
 
+        # ── 3. Expiry check ───────────────────────────────────────────────────
         now = datetime.now(timezone.utc)
         if record.expires_at and record.expires_at < now:
             record.status = "expired"
             db.commit()
-            raise HTTPException(status_code=410, detail="Callback token has expired")
+            logger.warning("[ImageCallback] Token expired  hint=%s", hint)
+            raise HTTPException(status_code=410, detail="Callback token has expired.")
 
-        # 2. Verify business records
+        # ── 4. Verify business records + cross-validate relationships ─────────
         project = db.query(Project).filter(Project.id == record.project_id).first()
         if not project:
-             raise HTTPException(status_code=404, detail="Associated project no longer exists")
+            logger.error(
+                "[ImageCallback] Project not found  hint=%s  project_id=%s",
+                hint, record.project_id,
+            )
+            raise HTTPException(status_code=404, detail="Associated project no longer exists.")
 
         task: Optional[Task] = None
         if record.task_id:
             task = db.query(Task).filter(Task.id == record.task_id).first()
+            if not task:
+                logger.error(
+                    "[ImageCallback] Task not found  hint=%s  task_id=%s",
+                    hint, record.task_id,
+                )
+                raise HTTPException(status_code=404, detail="Associated task no longer exists.")
+            # Cross-validate: task must belong to the expected project
+            if task.project_id != record.project_id:
+                logger.error(
+                    "[ImageCallback] CROSS-VALIDATION FAILED task.project_id=%s != "
+                    "record.project_id=%s  hint=%s  task_id=%s",
+                    task.project_id, record.project_id, hint, task.id,
+                )
+                raise HTTPException(
+                    status_code=409,
+                    detail="Task/project relationship is inconsistent on callback record.",
+                )
 
         submission: Optional[TaskSubmission] = None
-        logger.info(
-            "[ImageCallback] Record lookup  hint=%s  file_type=%s  submission_id=%s  task_id=%s",
-            hint, record.file_type, record.submission_id, record.task_id,
-        )
         if record.submission_id:
-            submission = db.query(TaskSubmission).filter(TaskSubmission.id == record.submission_id).first()
+            submission = (
+                db.query(TaskSubmission)
+                .filter(TaskSubmission.id == record.submission_id)
+                .first()
+            )
             if submission is None:
                 logger.error(
-                    "[ImageCallback] submission_id %s not found in task_submissions  hint=%s",
+                    "[ImageCallback] submission_id=%s not found in task_submissions  hint=%s",
                     record.submission_id, hint,
+                )
+            else:
+                # Cross-validate: submission must belong to the expected task
+                if record.task_id and submission.task_id != record.task_id:
+                    logger.error(
+                        "[ImageCallback] CROSS-VALIDATION FAILED submission.task_id=%s != "
+                        "record.task_id=%s  hint=%s  submission_id=%s",
+                        submission.task_id, record.task_id, hint, submission.id,
+                    )
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Submission/task relationship is inconsistent on callback record.",
+                    )
+                logger.info(
+                    "[ImageCallback] Submission cross-validated OK  hint=%s  "
+                    "submission_id=%s  submission.task_id=%s",
+                    hint, submission.id, submission.task_id,
                 )
         else:
             logger.error(
-                "[ImageCallback] submission_id is NULL on callback record — cannot write watermark_file_path  hint=%s",
-                hint,
+                "[ImageCallback] submission_id is NULL on callback record  "
+                "hint=%s  file_type=%s",
+                hint, record.file_type,
             )
 
-        # 3. Construct Public URL
-        # "task-submissions/preview/1775060331076-file.png" → bucket="task-submissions", path="preview/..."
+        # For watermarked_preview, a missing submission is a hard failure:
+        # we cannot write watermark_file_path → mark failed and abort.
+        if record.file_type == "watermarked_preview" and submission is None:
+            record.status = "failed"
+            record.error_message = (
+                f"Cannot write watermark_file_path: submission_id={record.submission_id!r} "
+                f"resolved to None "
+                f"({'null on record' if not record.submission_id else 'not found in DB'})"
+            )
+            db.commit()
+            logger.error(
+                "[ImageCallback] ABORTING: no submission for watermarked_preview  "
+                "hint=%s  record_id=%s → marked failed",
+                hint, record.id,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Cannot persist watermark: linked submission not found. "
+                       "Callback marked failed.",
+            )
+
+        # ── 5. Parse storage path ─────────────────────────────────────────────
+        # image_path: "task-submissions/preview/1775060331076-file.png"
+        #   → bucket="task-submissions", storage_path="preview/1775060331076-file.png"
         parts = image_path.split("/", 1)
-        if len(parts) < 2:
-            bucket = "task-submissions"
-            storage_path = image_path
-        else:
-            bucket = parts[0]
-            storage_path = parts[1]
+        bucket = parts[0]
+        storage_path = parts[1] if len(parts) > 1 else image_path
 
         public_url = (
             f"{settings.SUPABASE_URL.rstrip('/')}/storage/v1/object/public/"
             f"{bucket}/{storage_path}"
         )
         logger.info(
-            "[ImageCallback] Path parsed  hint=%s  bucket=%s  storage_path=%s  public_url=%s",
-            hint, bucket, storage_path, public_url,
+            "[ImageCallback] Path parsed  hint=%s  raw_path=%r  bucket=%r  "
+            "storage_path=%r  public_url=%r",
+            hint, image_path, bucket, storage_path, public_url,
         )
 
-        # 4. Persist
-        record.status = "completed"
+        # ── 6. Stage writes (record.status NOT set yet) ───────────────────────
         record.storage_bucket = bucket
         record.storage_path = storage_path
         record.processed_at = now
@@ -200,40 +336,86 @@ class ImageCallbackService:
         if submission is not None:
             if record.file_type == "watermarked_preview":
                 submission.watermarked_file_paths = json.dumps([public_url])
-                submission.watermark_file_path = image_path
+                submission.watermark_file_path = image_path  # exact raw path from n8n
                 logger.info(
-                    "[ImageCallback] Writing watermark_file_path=%r to submission %s  hint=%s",
-                    image_path, submission.id, hint,
+                    "[ImageCallback] Staging watermark write  hint=%s  "
+                    "submission_id=%s  watermark_file_path=%r  watermarked_file_paths=%r",
+                    hint, submission.id, image_path, submission.watermarked_file_paths,
                 )
             elif record.file_type == "final_version":
                 submission.file_paths = json.dumps([public_url])
                 logger.info(
-                    "[ImageCallback] Writing file_paths to submission %s  hint=%s",
-                    submission.id, hint,
+                    "[ImageCallback] Staging final_version write  hint=%s  submission_id=%s",
+                    hint, submission.id,
                 )
         else:
-            logger.error(
-                "[ImageCallback] submission is None — skipping task_submissions write  hint=%s  file_type=%s",
+            # Non-watermarked_preview with no submission: log and continue
+            logger.warning(
+                "[ImageCallback] submission is None — skipping task_submissions write  "
+                "hint=%s  file_type=%s",
                 hint, record.file_type,
             )
 
+        # ── 7. Atomic commit (record.status = "completed" only on success) ────
         try:
+            record.status = "completed"  # set INSIDE try — rolled back if commit fails
             db.commit()
+            if submission is not None:
+                db.refresh(submission)
             db.refresh(record)
             logger.info(
-                "[ImageCallback] DB commit OK  hint=%s  record_status=%s  submission_id=%s",
-                hint, record.status, record.submission_id,
+                "[ImageCallback] DB commit OK  hint=%s  record_id=%s  record_status=%s  "
+                "submission_id=%s",
+                hint, record.id, record.status, record.submission_id,
             )
         except Exception as exc:
-            logger.error("[ImageCallback] DB commit FAILED  hint=%s  error=%s", hint, exc)
+            logger.error(
+                "[ImageCallback] DB commit FAILED — rolling back  hint=%s  error=%s",
+                hint, exc,
+            )
+            db.rollback()
+            try:
+                record.status = "failed"
+                record.error_message = f"DB commit failed: {exc}"
+                db.commit()
+                logger.info(
+                    "[ImageCallback] Record marked failed after rollback  hint=%s", hint
+                )
+            except Exception as mark_exc:
+                logger.critical(
+                    "[ImageCallback] Could not mark record as failed after rollback  "
+                    "hint=%s  error=%s",
+                    hint, mark_exc,
+                )
             raise HTTPException(status_code=500, detail=f"Database commit failed: {exc}")
 
-        # 5. Update delivery state
+        # ── 8. Post-write verification ────────────────────────────────────────
+        if submission is not None and record.file_type == "watermarked_preview":
+            actual = getattr(submission, "watermark_file_path", None)
+            if actual != image_path:
+                logger.error(
+                    "[ImageCallback] POST-WRITE MISMATCH  hint=%s  submission_id=%s  "
+                    "expected_path=%r  actual_path=%r  "
+                    "(data may still be committed — monitor DB directly)",
+                    hint, submission.id, image_path, actual,
+                )
+            else:
+                logger.info(
+                    "[ImageCallback] Post-write verification OK  hint=%s  "
+                    "submission_id=%s  watermark_file_path=%r",
+                    hint, submission.id, actual,
+                )
+
+        # ── 9. Update delivery state ──────────────────────────────────────────
         if task:
             try:
                 self._update_delivery_state(db, record, task, project)
             except Exception as exc:
-                logger.warning("[ImageCallback] State update failed  hint=%s  error=%s", hint, exc)
+                logger.warning(
+                    "[ImageCallback] Delivery state update failed (non-fatal — "
+                    "storage and submission are consistent)  hint=%s  error=%s",
+                    hint, exc,
+                )
 
         return record
 
