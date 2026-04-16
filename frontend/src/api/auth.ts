@@ -10,7 +10,7 @@ export const api = axios.create({
     },
 });
 
-// Attach JWT token to every outgoing request
+// Attach Supabase access token to every outgoing request
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -24,10 +24,10 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            console.warn("Unauthorized! Clearing token and redirecting to login...");
+            console.warn('Unauthorized — clearing session and redirecting to login...');
             localStorage.removeItem('token');
+            localStorage.removeItem('refresh_token');
             localStorage.removeItem('user');
-            // Force reload to login if we are not already there
             if (!window.location.pathname.includes('/login')) {
                 window.location.href = '/login';
             }
@@ -40,35 +40,38 @@ api.interceptors.response.use(
 
 interface LoginResponse {
     access_token: string;
+    refresh_token: string;
     token_type: string;
     role: UserRole;
     user: CurrentUser;
 }
 
-// ── Auth service (MODEL layer) ────────────────────────────────────────────────
+// ── Auth service ──────────────────────────────────────────────────────────────
 
 export const authService = {
     async login(email: string, password: string): Promise<LoginResponse> {
         const response = await api.post<LoginResponse>('/auth/login', { email, password });
-
         if (response.data.access_token) {
             localStorage.setItem('token', response.data.access_token);
-            localStorage.setItem(
-                'user',
-                JSON.stringify(response.data.user)
-            );
+            localStorage.setItem('refresh_token', response.data.refresh_token);
+            localStorage.setItem('user', JSON.stringify(response.data.user));
         }
         return response.data;
     },
 
     async register(userData: RegisterPayload): Promise<unknown> {
-        console.log('REGISTER PAYLOAD:', userData);
         const response = await api.post<unknown>('/auth/signup', userData);
+        return response.data;
+    },
+
+    async forgotPassword(email: string): Promise<{ message: string }> {
+        const response = await api.post<{ message: string }>('/auth/forgot-password', { email });
         return response.data;
     },
 
     logout(): void {
         localStorage.removeItem('token');
+        localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
     },
 

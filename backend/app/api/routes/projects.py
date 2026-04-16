@@ -403,6 +403,7 @@ def brief_action(
                 title="Your brief has been validated",
                 notification_type=NotificationType.project_created,
                 body="Your project brief was reviewed and validated. A project will be created soon.",
+                project_id=project.id,
                 brief_id=project.id,
             )
     elif action == "clarify":
@@ -415,6 +416,7 @@ def brief_action(
                 title="Clarification requested on your brief",
                 notification_type=NotificationType.clarification_requested,
                 body=action_req.notes or "The manager needs more information on your brief.",
+                project_id=project.id,
                 brief_id=project.id,
             )
     elif action == "reject":
@@ -427,6 +429,7 @@ def brief_action(
                 title="Your brief was not accepted",
                 notification_type=NotificationType.general,
                 body=action_req.notes or "Your brief was rejected.",
+                project_id=project.id,
                 brief_id=project.id,
             )
     else:

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from app.db.session import get_db
@@ -6,7 +6,6 @@ from app.schemas.user import UserRead, UserUpdate, PasswordChange, AdminUserCrea
 from app.api.deps import get_current_user
 from app.models.user import User, UserRole
 from app.services.user_service import user_service
-from app.core.security import verify_password, get_password_hash
 
 router = APIRouter()
 
@@ -39,13 +38,32 @@ def patch_user_me(
 @router.patch("/me/password")
 def change_password(
     payload: PasswordChange,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not verify_password(payload.current_password, current_user.hashed_password):
+    from app.services.supabase_client import supabase, supabase_admin
+
+    # 1. Verify current password via Supabase sign-in
+    try:
+        result = supabase.auth.sign_in_with_password({
+            "email": current_user.email,
+            "password": payload.current_password,
+        })
+        if not result.user:
+            raise Exception("invalid credentials")
+    except Exception:
         raise HTTPException(status_code=400, detail="Current password is incorrect")
-    current_user.hashed_password = get_password_hash(payload.new_password)
-    db.commit()
+
+    # 2. Update password in Supabase via admin client
+    if supabase_admin is None:
+        raise HTTPException(status_code=503, detail="Admin client not configured (missing SUPABASE_SERVICE_KEY)")
+    try:
+        supabase_admin.auth.admin.update_user_by_id(
+            str(current_user.id),
+            {"password": payload.new_password},
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update password: {e}")
+
     return {"message": "Password updated successfully"}
 
 
@@ -71,19 +89,18 @@ def create_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Admin creates an employee account directly"""
+    """Admin creates an employee account directly."""
     _require_admin(current_user)
     existing = user_service.get_user_by_email(db, user_in.email)
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     from app.schemas.user import UserCreate
-    new_user_data = UserCreate(
+    return user_service.create_user(db, UserCreate(
         email=user_in.email,
         full_name=user_in.full_name,
         password=user_in.password,
         role=user_in.role,
-    )
-    return user_service.create_user(db, new_user_data)
+    ))
 
 
 @router.patch("/{user_id}", response_model=UserRead)
@@ -93,7 +110,7 @@ def admin_update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Admin updates user role or active status"""
+    """Admin updates user role or active status."""
     _require_admin(current_user)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -113,7 +130,7 @@ def deactivate_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Admin soft-deactivates a user account"""
+    """Admin soft-deactivates a user account."""
     _require_admin(current_user)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -121,4 +138,3 @@ def deactivate_user(
     user.is_active = False
     db.commit()
     return {"message": f"User {user.email} deactivated"}
-

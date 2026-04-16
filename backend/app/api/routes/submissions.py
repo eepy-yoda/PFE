@@ -21,6 +21,7 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.models.user import User, UserRole
 from app.models.task import Task
+from app.models.project import Project
 from app.schemas.submission import SubmissionCreateRequest, SubmissionRead, WebhookCallbackPayload, WatermarkCallbackPayload
 from app.services.submission_service import submission_service
 
@@ -98,12 +99,18 @@ def list_submissions(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if current_user.role == UserRole.employee and task.assigned_to != current_user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    if current_user.role == UserRole.employee:
+        has_task = db.query(Task).filter(
+            Task.project_id == task.project_id,
+            Task.assigned_to == current_user.id,
+        ).first()
+        proj = db.query(Project).filter(Project.id == task.project_id).first()
+        if not has_task and (not proj or proj.assigned_to != current_user.id):
+            raise HTTPException(status_code=403, detail="Access denied")
 
     # Clients may only access their own project's submissions
     if current_user.role == UserRole.client:
-        from app.models.project import Project, DeliveryState
+        from app.models.project import DeliveryState
         project = db.query(Project).filter(Project.id == task.project_id).first()
         if not project or project.client_id != current_user.id:
             raise HTTPException(status_code=403, detail="Access denied")

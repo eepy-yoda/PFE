@@ -106,13 +106,6 @@ class TaskFeedbackRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# --- Dependency Schemas ---
-
-class TaskDependencyCreate(BaseModel):
-    task_id: UUID
-    depends_on_task_id: UUID
-
-
 class AIReviewResult(BaseModel):
     """Webhook payload from AI review service"""
     task_id: UUID

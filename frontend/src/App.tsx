@@ -18,6 +18,7 @@ import ProtectedRoute from "./views/components/ProtectedRoute";
 import { ThemeProvider } from "./context/ThemeContext";
 import GuidedBrief from "./views/pages/GuidedBrief";
 import ResetPassword from "./views/pages/ResetPassword";
+import ForgotPassword from "./views/pages/ForgotPassword";
 
 const App: React.FC = () => {
     return (
@@ -79,6 +80,7 @@ const App: React.FC = () => {
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
                     <Route path="/test-connection" element={<ConnectionTest />} />
 
                     <Route path="*" element={<div className="flex items-center justify-center h-screen text-xl text-gray-500 font-medium">404 - Page Not Found</div>} />

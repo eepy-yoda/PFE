@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { User, Mail, Briefcase, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Sun, Moon } from 'lucide-react';
+import { User, Mail, Lock, CheckCircle2, AlertCircle, Eye, EyeOff, Loader2, Sun, Moon } from 'lucide-react';
 import useSignupViewModel from '../../viewmodels/useSignupViewModel';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -10,9 +10,7 @@ const Signup: React.FC = () => {
         error,
         showPassword,
         isSuccess,
-        isAgency,
         handleChange,
-        handleAgencyToggle,
         handleSubmit,
         togglePasswordVisibility,
     } = useSignupViewModel();
@@ -136,49 +134,6 @@ const Signup: React.FC = () => {
                                             placeholder="you@company.com"
                                         />
                                     </div>
-                                </div>
-
-                                {/* Agency toggle + name */}
-                                <div className="space-y-1.5">
-                                    <label className="flex items-center gap-2 cursor-pointer group mb-2">
-                                        <div className="relative flex items-center">
-                                            <input
-                                                type="checkbox"
-                                                checked={!isAgency}
-                                                onChange={handleAgencyToggle}
-                                                className="peer sr-only"
-                                            />
-                                            <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-700 rounded md:rounded-md peer-checked:bg-primary peer-checked:border-primary transition-all"></div>
-                                            <CheckCircle2
-                                                size={12}
-                                                className="absolute text-white opacity-0 peer-checked:opacity-100 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-all"
-                                            />
-                                        </div>
-                                        <span className="text-sm text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
-                                            I don't have an agency (Personal work)
-                                        </span>
-                                    </label>
-
-                                    {isAgency && (
-                                        <>
-                                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Agency Name</label>
-                                            <div className="relative">
-                                                <Briefcase
-                                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                                                    size={18}
-                                                />
-                                                <input
-                                                    type="text"
-                                                    name="agencyName"
-                                                    value={formData.agencyName}
-                                                    onChange={handleChange}
-                                                    required={isAgency}
-                                                    className="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-gray-900 dark:text-white placeholder:text-gray-400"
-                                                    placeholder="Your Agency"
-                                                />
-                                            </div>
-                                        </>
-                                    )}
                                 </div>
 
                                 {/* Password */}

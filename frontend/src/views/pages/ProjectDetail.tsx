@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { projectsService } from '../../api/projects';
 import { managementService } from '../../api/management';
 import { api } from '../../api/auth';
@@ -34,6 +34,7 @@ import { supabase } from '../../lib/supabaseClient';
 const ProjectDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { isAdmin, isManager, isClient, isEmployee } = useDashboardViewModel();
 
     const [project, setProject] = useState<Project | null>(null);
@@ -63,10 +64,6 @@ const ProjectDetail: React.FC = () => {
     // Client-safe deliverable viewer
     const [clientDeliverableModal, setClientDeliverableModal] = useState<{ task: Task; subs: TaskSubmission[] } | null>(null);
     const [clientDeliverableLoading, setClientDeliverableLoading] = useState(false);
-
-    // Dependency Form State
-    const [depForm, setDepForm] = useState({ task_id: '', depends_on_task_id: '' });
-    const [depSaving, setDepSaving] = useState(false);
 
     // Feedback modal (manager → employee)
     const [feedbackModal, setFeedbackModal] = useState<{ task: Task } | null>(null);
@@ -98,6 +95,7 @@ const ProjectDetail: React.FC = () => {
                     const users = await managementService.getWorkers();
                     setStaff(users.filter(u => u.role === 'employee'));
                 }
+
             } catch (err) {
                 console.error("Failed to fetch project detail", err);
             } finally {
@@ -168,29 +166,6 @@ const ProjectDetail: React.FC = () => {
         }
     };
 
-    const handleAddDependency = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!depForm.task_id || !depForm.depends_on_task_id) return;
-        if (depForm.task_id === depForm.depends_on_task_id) {
-            alert('A task cannot depend on itself.');
-            return;
-        }
-        setDepSaving(true);
-        try {
-            await api.post('/tasks/dependencies', {
-                task_id: depForm.task_id,
-                depends_on_task_id: depForm.depends_on_task_id,
-            });
-            alert('Dependency added successfully.');
-            setDepForm({ task_id: '', depends_on_task_id: '' });
-        } catch (err: unknown) {
-            const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-            alert(detail || 'Failed to add dependency.');
-        } finally {
-            setDepSaving(false);
-        }
-    };
-
     const handleSendFeedback = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!feedbackModal || !feedbackMsg.trim()) return;
@@ -257,6 +232,20 @@ const ProjectDetail: React.FC = () => {
             setDetailLoading(false);
         }
     };
+
+    // Deep-link: open task modal once when navigated from a notification (?task=taskId)
+    const deepLinkHandled = useRef(false);
+    useEffect(() => {
+        if (deepLinkHandled.current || tasks.length === 0) return;
+        const deepTaskId = searchParams.get('task');
+        if (!deepTaskId) return;
+        const target = tasks.find(t => t.id === deepTaskId);
+        if (target) {
+            deepLinkHandled.current = true;
+            openTaskDetail(target);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [tasks]);
 
     const handleSaveEdit = async () => {
         if (!taskDetail) return;
@@ -680,44 +669,6 @@ const ProjectDetail: React.FC = () => {
                             })()}
                         </div>
 
-                        {(isManager || isAdmin) && tasks.length >= 2 && (
-                            <div className="mt-8 bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-6">
-                                <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                    <ArrowRight size={18} className="text-primary" /> Task Dependencies
-                                </h3>
-                                <form onSubmit={handleAddDependency} className="flex flex-col sm:flex-row gap-4 items-end">
-                                    <div className="flex-1 space-y-1.5">
-                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Task</label>
-                                        <select
-                                            required
-                                            value={depForm.task_id}
-                                            onChange={e => setDepForm({ ...depForm, task_id: e.target.value })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                        >
-                                            <option value="">Select task…</option>
-                                            {tasks.map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="text-gray-400 text-sm font-bold pb-2.5">depends on</div>
-                                    <div className="flex-1 space-y-1.5">
-                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Prerequisite Task</label>
-                                        <select
-                                            required
-                                            value={depForm.depends_on_task_id}
-                                            onChange={e => setDepForm({ ...depForm, depends_on_task_id: e.target.value })}
-                                            className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                        >
-                                            <option value="">Select prerequisite…</option>
-                                            {tasks.filter(t => t.id !== depForm.task_id).map(t => <option key={t.id} value={t.id}>{t.title}</option>)}
-                                        </select>
-                                    </div>
-                                    <button type="submit" disabled={depSaving} className="px-5 py-2.5 bg-primary text-white rounded-xl font-bold text-sm shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all disabled:opacity-50 whitespace-nowrap pb-2.5">
-                                        {depSaving ? 'Saving…' : 'Add Dependency'}
-                                    </button>
-                                </form>
-                                <p className="text-xs text-gray-400 dark:text-gray-600 mt-3">Dependencies define which task must be completed before another can start.</p>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

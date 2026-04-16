@@ -6,14 +6,17 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
-    SECRET_KEY: str
+    # Kept for backward-compat; no longer used for JWT signing (Supabase owns auth)
+    SECRET_KEY: str = "unused-supabase-handles-auth"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    
+
     DATABASE_URL: str
     SUPABASE_URL: str
     SUPABASE_ANON_KEY: str
-    SUPABASE_SERVICE_KEY: Optional[str] = None  # service_role key — bypasses RLS for storage uploads
+    SUPABASE_SERVICE_KEY: Optional[str] = None  # service_role key — admin ops + storage
+
+    FRONTEND_URL: str = "http://localhost:5173"
     
     N8N_BRIEF_WEBHOOK_URL: Optional[str] = None
     N8N_AI_RESUME_WEBHOOK_URL: Optional[str] = None

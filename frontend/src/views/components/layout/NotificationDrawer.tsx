@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { notificationsService } from '../../../api/notifications';
-import { Notification } from '../../../types';
+import { Notification, NotificationType } from '../../../types';
 import { Bell, Check, X, Clock, Info, AlertCircle, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow } from 'date-fns';
+import { authService } from '../../../api/auth';
 
 interface NotificationDrawerProps {
     isOpen: boolean;
@@ -11,9 +13,55 @@ interface NotificationDrawerProps {
     onUnreadCountChange?: (count: number) => void;
 }
 
+function resolveRoute(notif: Notification, userRole: string): string | null {
+    const { type, project_id, task_id } = notif;
+
+    switch (type as NotificationType) {
+        case 'task_assigned':
+        case 'work_submitted':
+        case 'ai_score_low':
+        case 'revision_requested':
+        case 'task_late':
+            if (project_id && task_id) return `/project/${project_id}?task=${task_id}`;
+            if (project_id) return `/project/${project_id}`;
+            return null;
+
+        case 'content_ready':
+            if (project_id && task_id) return `/project/${project_id}?task=${task_id}`;
+            if (project_id) return `/project/${project_id}`;
+            return null;
+
+        case 'brief_submitted':
+            if (project_id) return `/brief-review/${project_id}`;
+            return null;
+
+        case 'clarification_requested':
+            // Client needs to update their brief
+            if (project_id) return `/project/${project_id}`;
+            return null;
+
+        case 'project_created':
+        case 'project_paid':
+            if (project_id) return `/project/${project_id}`;
+            return null;
+
+        case 'general':
+        default:
+            if (project_id) return `/project/${project_id}`;
+            // Role-based dashboard fallback
+            if (userRole === 'manager') return '/manager-dashboard';
+            if (userRole === 'client') return '/client-dashboard';
+            if (userRole === 'employee') return '/worker-dashboard';
+            if (userRole === 'admin') return '/admin-dashboard';
+            return '/dashboard';
+    }
+}
+
 const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, onClose, onUnreadCountChange }) => {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
+    const currentUser = authService.getCurrentUser();
 
     const fetchNotifications = async () => {
         setLoading(true);
@@ -55,6 +103,26 @@ const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, onClose
             if (onUnreadCountChange) onUnreadCountChange(0);
         } catch (err) {
             console.error("Failed to mark all as read", err);
+        }
+    };
+
+    const handleNotificationClick = async (notif: Notification) => {
+        const route = resolveRoute(notif, currentUser?.role ?? '');
+        if (notif.status === 'unread') {
+            try {
+                await notificationsService.markAsRead(notif.id);
+                setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, status: 'read' as const } : n));
+                if (onUnreadCountChange) {
+                    const newCount = notifications.filter(n => n.id !== notif.id && n.status === 'unread').length;
+                    onUnreadCountChange(newCount);
+                }
+            } catch {
+                // non-blocking
+            }
+        }
+        if (route) {
+            onClose();
+            navigate(route);
         }
     };
 
@@ -129,7 +197,8 @@ const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, onClose
                                 notifications.map((notif) => (
                                     <div
                                         key={notif.id}
-                                        className={`p-6 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors relative group ${notif.status === 'unread' ? 'bg-primary/[0.02]' : ''}`}
+                                        onClick={() => handleNotificationClick(notif)}
+                                        className={`p-6 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors relative group cursor-pointer ${notif.status === 'unread' ? 'bg-primary/[0.02]' : ''}`}
                                     >
                                         <div className="flex gap-4">
                                             <div className="shrink-0 mt-1">
@@ -154,8 +223,9 @@ const NotificationDrawer: React.FC<NotificationDrawerProps> = ({ isOpen, onClose
 
                                             {notif.status === 'unread' && (
                                                 <button
-                                                    onClick={() => handleMarkAsRead(notif.id)}
+                                                    onClick={(e) => { e.stopPropagation(); handleMarkAsRead(notif.id); }}
                                                     className="opacity-0 group-hover:opacity-100 p-1.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-md shadow-sm text-gray-400 hover:text-primary transition-all self-center"
+                                                    title="Mark as read"
                                                 >
                                                     <Check size={14} />
                                                 </button>

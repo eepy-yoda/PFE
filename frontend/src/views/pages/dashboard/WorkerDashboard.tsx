@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { projectsService } from '../../../api/projects';
+import { authService } from '../../../api/auth';
 import { Task, TaskFeedback, TaskSubmission, Project } from '../../../types';
 import SubmitWorkModal from '../../../components/SubmitWorkModal';
 import AIAnalysisCard from '../../../components/AIAnalysisCard';
@@ -44,6 +45,7 @@ type ActiveTab = 'dashboard' | 'projects';
 
 const WorkerDashboard: React.FC = () => {
     const navigate = useNavigate();
+    const currentUserId = authService.getCurrentUser()?.id;
 
     // ── tab ──
     const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
@@ -343,7 +345,7 @@ const WorkerDashboard: React.FC = () => {
                         <div className="space-y-6">
                             {projects.map(project => {
                                 const ptasks = projectTasks[project.id] || [];
-                                const myTasks = ptasks.filter(t => t.assigned_to);
+                                const myTasks = ptasks.filter(t => t.assigned_to === currentUserId);
                                 const done = myTasks.filter(t => ['completed', 'approved'].includes(t.status)).length;
                                 const progress = myTasks.length ? Math.round((done / myTasks.length) * 100) : 0;
                                 const isBriefOpen = briefOpen === project.id;

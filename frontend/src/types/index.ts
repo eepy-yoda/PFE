@@ -60,7 +60,6 @@ export interface LoginViewModel {
 export interface SignupFormData {
     fullName: string;
     email: string;
-    agencyName: string;
     password: string;
 }
 
@@ -69,8 +68,7 @@ export interface RegisterPayload {
     email: string;
     password: string;
     full_name: string;
-    agency_name: string | null;
-    role: 'manager' | 'client';
+    role: 'client';
 }
 
 /** What the SignupViewModel exposes to the view */
@@ -80,9 +78,7 @@ export interface SignupViewModel {
     error: string;
     showPassword: boolean;
     isSuccess: boolean;
-    isAgency: boolean;
     handleChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    handleAgencyToggle: (e: React.ChangeEvent<HTMLInputElement>) => void;
     handleSubmit: (e: React.FormEvent<HTMLFormElement>) => Promise<void>;
     togglePasswordVisibility: () => void;
 }

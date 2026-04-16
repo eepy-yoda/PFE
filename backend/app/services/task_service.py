@@ -4,10 +4,10 @@ from datetime import datetime, timezone
 from uuid import UUID
 from typing import List, Optional
 
-from app.models.task import Task, TaskStatus, TaskSubmission, SubmissionStatus, TaskFeedback, TaskDependency
+from app.models.task import Task, TaskStatus, TaskSubmission, SubmissionStatus, TaskFeedback
 from app.models.project import Project
 from app.models.notification import NotificationType
-from app.schemas.task import TaskCreate, TaskUpdate, TaskSubmissionCreate, TaskFeedbackCreate, TaskDependencyCreate
+from app.schemas.task import TaskCreate, TaskUpdate, TaskSubmissionCreate, TaskFeedbackCreate
 from app.schemas.submission import SubmissionCreateRequest
 from app.services.notification_service import notification_service
 from app.services.activity_service import activity_service
@@ -164,6 +164,7 @@ class TaskService:
                         notification_type=NotificationType.content_ready,
                         body=f"Task '{task.title}' has been reviewed and approved.",
                         project_id=task.project_id,
+                        task_id=task.id,
                     )
             else:
                 task.status = TaskStatus.revision_requested
@@ -194,10 +195,9 @@ class TaskService:
         )
         db.add(db_feedback)
 
-        if feedback_in.is_revision_request:
-            task = db.query(Task).filter(Task.id == feedback_in.task_id).first()
-            if task:
-                task.status = TaskStatus.revision_requested
+        task = db.query(Task).filter(Task.id == feedback_in.task_id).first()
+        if feedback_in.is_revision_request and task:
+            task.status = TaskStatus.revision_requested
 
         db.commit()
         db.refresh(db_feedback)
@@ -210,20 +210,10 @@ class TaskService:
             notification_type=NotificationType.revision_requested,
             body=feedback_in.message[:200],
             task_id=feedback_in.task_id,
+            project_id=task.project_id if task else None,
         )
 
         return db_feedback
-
-    @staticmethod
-    def add_dependency(db: Session, dep_in: TaskDependencyCreate) -> TaskDependency:
-        dep = TaskDependency(
-            task_id=dep_in.task_id,
-            depends_on_task_id=dep_in.depends_on_task_id,
-        )
-        db.add(dep)
-        db.commit()
-        db.refresh(dep)
-        return dep
 
     @staticmethod
     def get_late_tasks(db: Session) -> List[Task]:

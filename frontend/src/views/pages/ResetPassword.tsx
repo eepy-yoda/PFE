@@ -1,23 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api } from '../../api/auth';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabaseClient';
 import { Lock, CheckCircle2, AlertCircle, Key } from 'lucide-react';
 
 const ResetPassword: React.FC = () => {
-    const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const token = searchParams.get('token');
 
+    const [ready, setReady] = useState(false);
     const [password, setPassword] = useState('');
     const [confirm, setConfirm] = useState('');
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState<{ text: string; ok: boolean } | null>(null);
 
     useEffect(() => {
-        if (!token) {
-            setMessage({ text: 'Invalid or missing reset token.', ok: false });
-        }
-    }, [token]);
+        // Supabase JS (with detectSessionInUrl: true by default) automatically
+        // exchanges the PKCE code from the URL and establishes a recovery session.
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+            if (error || !session) {
+                setMessage({ text: 'Invalid or expired reset link. Please request a new one.', ok: false });
+            } else {
+                setReady(true);
+            }
+        });
+    }, []);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -29,18 +34,23 @@ const ResetPassword: React.FC = () => {
             setMessage({ text: 'Password must be at least 6 characters.', ok: false });
             return;
         }
+
         setLoading(true);
         setMessage(null);
-        try {
-            await api.post('/auth/reset-password', { token, new_password: password });
-            setMessage({ text: 'Password reset successfully! Redirecting to login…', ok: true });
-            setTimeout(() => navigate('/login'), 2500);
-        } catch (err: unknown) {
-            const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
-            setMessage({ text: detail || 'Failed to reset password. Token may be expired.', ok: false });
-        } finally {
+
+        const { error } = await supabase.auth.updateUser({ password });
+
+        if (error) {
+            setMessage({ text: error.message || 'Failed to reset password.', ok: false });
             setLoading(false);
+            return;
         }
+
+        setMessage({ text: 'Password reset successfully! Redirecting to login…', ok: true });
+        // Sign out the recovery session so the user logs in fresh
+        await supabase.auth.signOut();
+        setTimeout(() => navigate('/login'), 2500);
+        setLoading(false);
     };
 
     return (
@@ -60,25 +70,46 @@ const ResetPassword: React.FC = () => {
                         </div>
                     )}
 
-                    <form onSubmit={handleSubmit} className="space-y-5">
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">New Password</label>
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 dark:text-gray-600" size={18} />
-                                <input type="password" required className="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/20 transition-all" placeholder="At least 6 characters" value={password} onChange={e => setPassword(e.target.value)} />
+                    {ready && (
+                        <form onSubmit={handleSubmit} className="space-y-5">
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">New Password</label>
+                                <div className="relative">
+                                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 dark:text-gray-600" size={18} />
+                                    <input
+                                        type="password"
+                                        required
+                                        className="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/20 transition-all"
+                                        placeholder="At least 6 characters"
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                    />
+                                </div>
                             </div>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Confirm Password</label>
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 dark:text-gray-600" size={18} />
-                                <input type="password" required className="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/20 transition-all" placeholder="Repeat new password" value={confirm} onChange={e => setConfirm(e.target.value)} />
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Confirm Password</label>
+                                <div className="relative">
+                                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 dark:text-gray-600" size={18} />
+                                    <input
+                                        type="password"
+                                        required
+                                        className="w-full bg-gray-50 dark:bg-gray-800 border-none rounded-2xl pl-12 pr-5 py-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/20 transition-all"
+                                        placeholder="Repeat new password"
+                                        value={confirm}
+                                        onChange={e => setConfirm(e.target.value)}
+                                    />
+                                </div>
                             </div>
-                        </div>
-                        <button type="submit" disabled={loading || !token} className="w-full py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all disabled:opacity-50">
-                            {loading ? 'Resetting…' : 'Reset Password'}
-                        </button>
-                    </form>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full py-4 bg-primary text-white rounded-2xl font-black shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all disabled:opacity-50"
+                            >
+                                {loading ? 'Resetting…' : 'Reset Password'}
+                            </button>
+                        </form>
+                    )}
+
                     <button onClick={() => navigate('/login')} className="w-full mt-4 text-sm text-gray-400 hover:text-primary transition-colors">
                         Back to Login
                     </button>

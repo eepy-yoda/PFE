@@ -15,22 +15,16 @@ const useSignupViewModel = (): SignupViewModel => {
     const [error, setError] = useState<string>('');
     const [showPassword, setShowPassword] = useState<boolean>(false);
     const [isSuccess, setIsSuccess] = useState<boolean>(false);
-    const [isAgency, setIsAgency] = useState<boolean>(true);
 
     const [formData, setFormData] = useState<SignupFormData>({
         fullName: '',
         email: '',
-        agencyName: '',
         password: '',
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
         const { name, value } = e.target;
         setFormData((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleAgencyToggle = (e: React.ChangeEvent<HTMLInputElement>): void => {
-        setIsAgency(!e.target.checked);
     };
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
@@ -43,8 +37,7 @@ const useSignupViewModel = (): SignupViewModel => {
                 email: formData.email,
                 password: formData.password,
                 full_name: formData.fullName,
-                agency_name: isAgency ? formData.agencyName : null,
-                role: isAgency ? 'manager' : 'client',
+                role: 'client',
             };
 
             await authService.register(payload);
@@ -78,9 +71,7 @@ const useSignupViewModel = (): SignupViewModel => {
         error,
         showPassword,
         isSuccess,
-        isAgency,
         handleChange,
-        handleAgencyToggle,
         handleSubmit,
         togglePasswordVisibility,
     };

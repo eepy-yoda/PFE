@@ -14,7 +14,7 @@ from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskRead,
     TaskSubmissionCreate, TaskSubmissionRead,
     TaskFeedbackCreate, TaskFeedbackRead,
-    TaskDependencyCreate, AIReviewResult, SubmissionWebhookResult,
+    AIReviewResult, SubmissionWebhookResult,
 )
 from app.models.task import SubmissionStatus
 from app.services.task_service import task_service
@@ -33,6 +33,14 @@ def _require_manager_or_admin(current_user: User):
 def _require_employee_or_above(current_user: User):
     if current_user.role not in [UserRole.employee, UserRole.manager, UserRole.admin]:
         raise HTTPException(status_code=403, detail="Employee access required")
+
+
+def _employee_has_project_access(db: Session, user_id, project_id) -> bool:
+    """True if employee has any assigned task in the project, or is the project-level assignee."""
+    if db.query(Task).filter(Task.project_id == project_id, Task.assigned_to == user_id).first():
+        return True
+    proj = db.query(Project).filter(Project.id == project_id).first()
+    return proj is not None and proj.assigned_to == user_id
 
 
 # ── TASK CRUD ─────────────────────────────────────────────────────────────────
@@ -80,8 +88,7 @@ def get_task(
     task = task_service.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    # Access check: employee can only see their own tasks
-    if current_user.role == UserRole.employee and task.assigned_to != current_user.id:
+    if current_user.role == UserRole.employee and not _employee_has_project_access(db, current_user.id, task.project_id):
         raise HTTPException(status_code=403, detail="Access denied")
     return task
 
@@ -148,7 +155,7 @@ def get_submissions(
     task = task_service.get_task(db, task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if current_user.role == UserRole.employee and task.assigned_to != current_user.id:
+    if current_user.role == UserRole.employee and not _employee_has_project_access(db, current_user.id, task.project_id):
         raise HTTPException(status_code=403, detail="Access denied")
     submissions = task_service.get_submissions_for_task(db, task_id)
 
@@ -331,18 +338,6 @@ def send_feedback(
     return task_service.send_feedback(db, feedback_in, current_user.id)
 
 
-# ── DEPENDENCIES ──────────────────────────────────────────────────────────────
-
-@router.post("/dependencies", status_code=201)
-def add_dependency(
-    dep_in: TaskDependencyCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    _require_manager_or_admin(current_user)
-    return task_service.add_dependency(db, dep_in)
-
-
 # ── LATE TASKS ────────────────────────────────────────────────────────────────
 
 @router.get("/alerts/late", response_model=List[TaskRead])
@@ -369,7 +364,7 @@ def get_task_feedbacks(
         raise HTTPException(status_code=404, detail="Task not found")
     if current_user.role == UserRole.client:
         raise HTTPException(status_code=403, detail="Access denied")
-    if current_user.role == UserRole.employee and task.assigned_to != current_user.id:
+    if current_user.role == UserRole.employee and not _employee_has_project_access(db, current_user.id, task.project_id):
         raise HTTPException(status_code=403, detail="Access denied")
     feedbacks = db.query(TaskFeedbackModel).filter(
         TaskFeedbackModel.task_id == task_id

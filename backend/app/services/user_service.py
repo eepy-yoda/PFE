@@ -1,53 +1,16 @@
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
-from app.core.security import get_password_hash
-from fastapi import HTTPException, status
-from uuid import UUID
-import secrets
-import requests
-import os # Added for os.getenv
-from app.services.email_service import email_service
-from app.core.config import settings
+from fastapi import HTTPException
 
-def sync_to_supabase(user_data):
-    """Fallback sync using REST API (Port 443) which isn't blocked by ISP"""
-    supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_ANON_KEY")
-    if not supabase_url or not supabase_key:
-        return
-    
-    url = f"{supabase_url}/rest/v1/users"
-    headers = {
-        "apikey": supabase_key,
-        "Authorization": f"Bearer {supabase_key}",
-        "Content-Type": "application/json",
-        "Prefer": "return=minimal"
-    }
-    try:
-        # Convert UUID to string for JSON serialization
-        data = {k: str(v) if k == 'id' else v for k, v in user_data.items()}
-        requests.post(url, headers=headers, json=data, timeout=5)
-        print("SYNC: Successfully mirrored user to Supabase Cloud!")
-    except Exception as e:
-        print(f"SYNC WARNING: Could not mirror to cloud: {e}")
+from app.services.supabase_client import supabase, supabase_admin
 
-from supabase import create_client, Client
-from app.core.config import settings
-
-# Initialize Supabase Client for Auth
-# create_client() itself is synchronous and should not block, but guard against
-# misconfigured/empty credentials which would raise immediately.
-try:
-    supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
-    print("[Startup] Supabase client initialised.")
-except Exception as _sb_init_err:
-    print(f"[Startup] Warning: Supabase client init failed: {_sb_init_err}")
-    supabase = None  # type: ignore
 
 class UserService:
+    # Expose the shared clients so other modules can import via user_service
     supabase = supabase
-    
+    supabase_admin = supabase_admin
+
     @staticmethod
     def get_user_by_email(db: Session, email: str):
         return db.query(User).filter(User.email == email).first()
@@ -55,59 +18,52 @@ class UserService:
     @staticmethod
     def create_user(db: Session, user_in: UserCreate):
         print(f"\n[SIGNUP] New registration request for: {user_in.email}")
-        
+
         try:
-            # 1. Register with Supabase Auth
-            # Note: Supabase sends the verification email automatically
             print(f"[SIGNUP] Step 1: Registering with Supabase Auth...")
-            
-            role_str = user_in.role.value if hasattr(user_in.role, 'value') else str(user_in.role)
-            
-            metadata = {
-                "full_name": user_in.full_name,
-                "agency_name": user_in.agency_name,
-                "role": role_str
-            }
-            print(f"[SIGNUP] Metadata reaching Supabase: {metadata}")
+            role_str = user_in.role.value if hasattr(user_in.role, "value") else str(user_in.role)
 
             auth_response = supabase.auth.sign_up({
                 "email": user_in.email,
                 "password": user_in.password,
                 "options": {
-                    "data": metadata
-                }
+                    "data": {
+                        "full_name": user_in.full_name,
+                        "role": role_str,
+                    }
+                },
             })
-            
+
             if not auth_response.user:
-                print(f"[SIGNUP] ❌ ERROR: Supabase Auth did not return a user record.")
-                raise HTTPException(status_code=400, detail="Supabase Auth rejected this email (it might already exist in Supabase Auth).")
+                print(f"[SIGNUP] Supabase Auth did not return a user record.")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Supabase Auth rejected this email (it may already exist).",
+                )
 
-            print(f"[SIGNUP] ✅ Supabase Auth Success (ID: {auth_response.user.id})")
+            print(f"[SIGNUP] Supabase Auth success (ID: {auth_response.user.id})")
 
-            # 2. Insert into local DB manually
-            print(f"[SIGNUP] Step 2: Manually inserting into public.users...")
+            # Insert local profile — no password stored here; Supabase owns credentials
+            print(f"[SIGNUP] Step 2: Inserting local profile...")
             try:
                 new_db_user = User(
                     id=auth_response.user.id,
                     email=user_in.email,
                     full_name=user_in.full_name,
-                    agency_name=user_in.agency_name,
-                    hashed_password=get_password_hash(user_in.password), # Storing it as requested
+                    hashed_password=None,   # Supabase owns the password
                     role=user_in.role,
                     is_active=True,
-                    is_verified=False
+                    is_verified=False,
                 )
                 db.add(new_db_user)
                 db.commit()
                 db.refresh(new_db_user)
-                print(f"[SIGNUP] ✅ Manual DB Insert Success! User saved in public.users.")
+                print(f"[SIGNUP] Local profile saved.")
             except Exception as db_err:
-                print(f"[SIGNUP] ❌ Manual DB Insert FAILED: {str(db_err)}")
-                if "duplicate key" in str(db_err).lower():
-                    print("[SIGNUP] TIP: This ID or Email already exists in public.users. Use clean_db.py to reset.")
+                print(f"[SIGNUP] DB insert failed: {db_err}")
                 db.rollback()
-                raise HTTPException(status_code=500, detail=f"Database Sync Error: {str(db_err)}")
-            
+                raise HTTPException(status_code=500, detail=f"Database error: {db_err}")
+
             return {
                 "id": auth_response.user.id,
                 "email": user_in.email,
@@ -115,15 +71,18 @@ class UserService:
                 "role": user_in.role,
                 "is_active": True,
                 "is_verified": False,
-                "created_at": auth_response.user.created_at
+                "created_at": auth_response.user.created_at,
             }
 
+        except HTTPException:
+            raise
         except Exception as e:
-            print(f"[SIGNUP] ❌ CRITICAL ERROR: {str(e)}")
+            print(f"[SIGNUP] Critical error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
     @staticmethod
     def get_user_by_token(db: Session, token: str):
+        """Legacy — kept for any remaining verification_token lookups."""
         return db.query(User).filter(User.verification_token == token).first()
 
     @staticmethod
@@ -134,5 +93,6 @@ class UserService:
         db.commit()
         db.refresh(db_user)
         return db_user
+
 
 user_service = UserService()
