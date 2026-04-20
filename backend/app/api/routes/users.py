@@ -4,6 +4,8 @@ from typing import List
 from app.db.session import get_db
 from app.schemas.user import UserRead, UserUpdate, PasswordChange, AdminUserCreate, AdminUserUpdate
 from app.api.deps import get_current_user
+from app.core.security import get_password_hash
+
 from app.models.user import User, UserRole
 from app.services.user_service import user_service
 
@@ -57,6 +59,11 @@ def change_password(
             str(current_user.id),
             {"password": payload.new_password},
         )
+        current_user.hashed_password = get_password_hash(payload.new_password)
+        db = Session.object_session(current_user)
+        if db:
+            db.commit()
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update password: {e}")
 
