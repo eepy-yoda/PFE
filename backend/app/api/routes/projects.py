@@ -111,7 +111,7 @@ def get_manager_dashboard(
         now = datetime.now(timezone.utc)
         three_days = now + timedelta(days=3)
 
-        # ── Worker Performance (3 aggregated queries, no N+1) ────────────────────
+        # ── Worker Performance (Aggregated queries) ──────────────────────────────
         total_by_emp = dict(
             db.query(Task.assigned_to, func.count(Task.id))
             .filter(Task.assigned_to.isnot(None))
@@ -164,18 +164,37 @@ def get_manager_dashboard(
         workers.sort(key=lambda w: w.performance_score, reverse=True)
 
         # ── Revenue ───────────────────────────────────────────────────────────────
-        paid_projects    = db.query(Project).filter(Project.payment_status == PaymentStatus.fully_paid).order_by(Project.paid_at.desc()).all()
-        pending_count    = db.query(func.count(Project.id)).filter(Project.payment_status == PaymentStatus.unpaid).scalar() or 0
-        overdue_count    = db.query(func.count(Project.id)).filter(Project.payment_status == PaymentStatus.overdue).scalar() or 0
+        # OPTIMIZATION: Limit paid projects to recent ones only
+        paid_projects = db.query(Project)\
+            .filter(Project.payment_status == PaymentStatus.fully_paid)\
+            .order_by(Project.paid_at.desc())\
+            .limit(10).all()
+            
+        paid_count = db.query(func.count(Project.id)).filter(Project.payment_status == PaymentStatus.fully_paid).scalar() or 0
+        pending_count = db.query(func.count(Project.id)).filter(Project.payment_status == PaymentStatus.unpaid).scalar() or 0
+        overdue_count = db.query(func.count(Project.id)).filter(Project.payment_status == PaymentStatus.overdue).scalar() or 0
 
         # ── Task Workload ─────────────────────────────────────────────────────────
-        active_tasks = db.query(Task).filter(
+        # OPTIMIZATION: Fetch counts and specific lists instead of ALL active tasks
+        total_active_count = db.query(func.count(Task.id)).filter(
             Task.status.notin_([TaskStatus.completed, TaskStatus.approved])
-        ).all()
-        urgent_tasks      = [t for t in active_tasks if t.deadline and t.deadline < now]
-        near_tasks        = [t for t in active_tasks if t.deadline and now <= t.deadline <= three_days]
-        todo_count        = sum(1 for t in active_tasks if t.status == TaskStatus.todo)
-        in_progress_count = sum(1 for t in active_tasks if t.status == TaskStatus.in_progress)
+        ).scalar() or 0
+        
+        todo_count = db.query(func.count(Task.id)).filter(Task.status == TaskStatus.todo).scalar() or 0
+        in_progress_count = db.query(func.count(Task.id)).filter(Task.status == TaskStatus.in_progress).scalar() or 0
+        
+        urgent_tasks = db.query(Task).filter(
+            Task.status.notin_([TaskStatus.completed, TaskStatus.approved]),
+            Task.deadline.isnot(None),
+            Task.deadline < now
+        ).order_by(Task.deadline.asc()).limit(8).all()
+        
+        near_tasks = db.query(Task).filter(
+            Task.status.notin_([TaskStatus.completed, TaskStatus.approved]),
+            Task.deadline.isnot(None),
+            Task.deadline >= now,
+            Task.deadline <= three_days
+        ).order_by(Task.deadline.asc()).limit(8).all()
 
         def to_workload(t: Task) -> WorkloadTaskItem:
             return WorkloadTaskItem(
@@ -185,24 +204,38 @@ def get_manager_dashboard(
                 project_name=t.project_name, assigned_to=t.assigned_to,
             )
 
-        # ── Project Snapshot ──────────────────────────────────────────────────────
-        all_projects   = db.query(Project).all()
-        proj_active    = [p for p in all_projects if p.status == ProjectStatus.active]
-        proj_done      = [p for p in all_projects if p.status == ProjectStatus.completed]
-        proj_delivered = [p for p in all_projects if p.status == ProjectStatus.delivered]
-        proj_hold      = [p for p in all_projects if p.status == ProjectStatus.on_hold]
-        proj_delayed   = [p for p in all_projects if p.deadline and p.deadline < now
-                          and p.status not in (ProjectStatus.completed, ProjectStatus.delivered, ProjectStatus.archived)]
+        # ── Project Snapshot (Optimized Counts) ──────────────────────────────────
+        total_projects = db.query(func.count(Project.id)).scalar() or 0
+        status_counts = dict(db.query(Project.status, func.count(Project.id)).group_by(Project.status).all())
+        
+        proj_active_count = status_counts.get(ProjectStatus.active, 0)
+        proj_done_count = status_counts.get(ProjectStatus.completed, 0)
+        proj_delivered_count = status_counts.get(ProjectStatus.delivered, 0)
+        proj_hold_count = status_counts.get(ProjectStatus.on_hold, 0)
+        
+        # Delayed count needs specific filtering
+        proj_delayed_count = db.query(func.count(Project.id)).filter(
+            Project.deadline.isnot(None), 
+            Project.deadline < now,
+            Project.status.notin_([ProjectStatus.completed, ProjectStatus.delivered, ProjectStatus.archived])
+        ).scalar() or 0
+
+        # Recent active projects for display
+        active_projects_list = db.query(Project)\
+            .filter(Project.status == ProjectStatus.active)\
+            .order_by(Project.updated_at.desc())\
+            .limit(10).all()
 
         # ── Alerts ────────────────────────────────────────────────────────────────
         alerts = []
-        for t in urgent_tasks[:8]:
+        for t in urgent_tasks:
             alerts.append(DashboardAlertItem(
                 type='late_task', priority='critical',
                 title=f'Overdue: {t.title}',
                 detail=f'Deadline was {t.deadline.strftime("%b %d") if t.deadline else "N/A"}',
                 entity_id=str(t.project_id),
             ))
+        
         low_subs = (
             db.query(TaskSubmission)
             .filter(TaskSubmission.ai_score < 70, TaskSubmission.ai_score.isnot(None),
@@ -218,14 +251,16 @@ def get_manager_dashboard(
                     detail=f'Score {sub.ai_score:.0f}/100 — review required',
                     entity_id=str(t_obj.project_id),
                 ))
-        pending_briefs = db.query(Project).filter(Project.brief_status == BriefStatus.submitted).all()
-        for p in pending_briefs[:5]:
+                
+        pending_briefs = db.query(Project).filter(Project.brief_status == BriefStatus.submitted).limit(5).all()
+        for p in pending_briefs:
             alerts.append(DashboardAlertItem(
                 type='pending_brief', priority='info',
                 title=f'Brief awaiting review: {p.name}',
                 detail=f'Submitted {p.created_at.strftime("%b %d")}',
                 entity_id=str(p.id),
             ))
+            
         unassigned = db.query(Task).filter(Task.assigned_to.is_(None), Task.status == TaskStatus.todo).limit(5).all()
         for t in unassigned:
             alerts.append(DashboardAlertItem(
@@ -234,48 +269,50 @@ def get_manager_dashboard(
                 detail='No employee assigned yet',
                 entity_id=str(t.project_id),
             ))
+            
         alerts.sort(key=lambda a: {'critical': 0, 'warning': 1, 'info': 2}[a.priority])
 
         # ── Global KPIs ───────────────────────────────────────────────────────────
-        total_tasks     = db.query(func.count(Task.id)).scalar() or 0
+        total_tasks_global = db.query(func.count(Task.id)).scalar() or 0
         completed_total = db.query(func.count(Task.id)).filter(Task.status.in_([TaskStatus.completed, TaskStatus.approved])).scalar() or 0
-        completion_rate = round(completed_total / total_tasks * 100, 1) if total_tasks > 0 else 0.0
+        completion_rate = round(completed_total / total_tasks_global * 100, 1) if total_tasks_global > 0 else 0.0
         avg_ai_global   = db.query(func.avg(TaskSubmission.ai_score)).filter(TaskSubmission.ai_score.isnot(None)).scalar()
 
-        briefs = db.query(Project).filter(
+        # Briefs for display
+        briefs_list = db.query(Project).filter(
             Project.brief_status.in_([BriefStatus.submitted, BriefStatus.clarification_requested, BriefStatus.validated])
-        ).all()
+        ).limit(20).all()
 
         return ManagerDashboardData(
-            kpi_total_tasks=int(total_tasks),
+            kpi_total_tasks=int(total_tasks_global),
             kpi_completion_rate=completion_rate,
             kpi_avg_ai_score=round(float(avg_ai_global), 1) if avg_ai_global is not None else None,
             kpi_active_workers=sum(1 for w in workers if w.total_tasks > 0),
             workers=workers,
             revenue=RevenueSnapshot(
-                paid_count=len(paid_projects),
+                paid_count=paid_count,
                 pending_count=int(pending_count),
                 overdue_count=int(overdue_count),
                 recently_paid=paid_projects[:5],
             ),
             workload=TaskWorkloadSnapshot(
-                total=len(active_tasks),
+                total=total_active_count,
                 todo=todo_count,
                 in_progress=in_progress_count,
-                near_deadline=[to_workload(t) for t in near_tasks[:8]],
-                urgent=[to_workload(t) for t in urgent_tasks[:8]],
+                near_deadline=[to_workload(t) for t in near_tasks],
+                urgent=[to_workload(t) for t in urgent_tasks],
             ),
             projects=ProjectSnapshot(
-                total=len(all_projects),
-                active=len(proj_active),
-                completed=len(proj_done),
-                delivered=len(proj_delivered),
-                on_hold=len(proj_hold),
-                delayed=len(proj_delayed),
+                total=total_projects,
+                active=proj_active_count,
+                completed=proj_done_count,
+                delivered=proj_delivered_count,
+                on_hold=proj_hold_count,
+                delayed=proj_delayed_count,
             ),
             alerts=alerts[:15],
-            briefs=briefs,
-            active_projects=proj_active[:10],
+            briefs=briefs_list,
+            active_projects=active_projects_list,
         )
     except Exception as e:
         import traceback

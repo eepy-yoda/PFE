@@ -114,9 +114,7 @@ async def late_task_checker():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Run DB startup tasks in a thread so they never block the event loop
-    # Run DB startup tasks in a thread so they never block the event loop
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, _run_startup_db_tasks)
+    # loop.run_in_executor(None, _run_startup_db_tasks)
 
     checker_task = asyncio.create_task(late_task_checker())
     yield
