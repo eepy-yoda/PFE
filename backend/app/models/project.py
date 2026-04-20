@@ -53,7 +53,6 @@ class Project(Base):
     description = Column(Text, nullable=True)
     status = Column(SQLEnum(ProjectStatus, name="projectstatus", create_type=False), default=ProjectStatus.planning, nullable=False)
 
-    # Brief lifecycle
     brief_status = Column(SQLEnum(BriefStatus, name="briefstatus", create_type=True), default=BriefStatus.draft, nullable=False)
     brief_history = Column(Text, nullable=True)
     next_question = Column(Text, nullable=True)   # stores n8n schema (full field list)
@@ -61,7 +60,6 @@ class Project(Base):
     brief_content = Column(Text, nullable=True)
     clarification_notes = Column(Text, nullable=True)
 
-    # Payment
     payment_type = Column(SQLEnum(PaymentType, name="paymenttype", create_type=True), default=PaymentType.project)
     payment_status = Column(SQLEnum(PaymentStatus, name="paymentstatus", create_type=True), default=PaymentStatus.unpaid)
     total_project_price = Column(Float, nullable=True, default=0.0)
@@ -69,11 +67,9 @@ class Project(Base):
     paid_at = Column(DateTime(timezone=True), nullable=True)
     payment_updated_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Timing
     deadline = Column(DateTime(timezone=True), nullable=True)
     delivered_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Relationships
     manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
     client_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     assigned_to = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)

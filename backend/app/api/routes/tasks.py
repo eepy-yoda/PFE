@@ -2,8 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from uuid import UUID
-import requests as http_client
-
 from app.db.session import get_db
 from app.api.deps import get_current_user, get_current_user_optional
 from app.core.config import settings

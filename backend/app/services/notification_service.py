@@ -20,7 +20,6 @@ class NotificationService:
         task_id: Optional[UUID] = None,
         brief_id: Optional[UUID] = None,
     ) -> Notification:
-        # 1. Save to database
         notif = Notification(
             user_id=user_id,
             type=notification_type,
@@ -34,7 +33,6 @@ class NotificationService:
         db.commit()
         db.refresh(notif)
         
-        # 2. Send email notification
         try:
             user = db.query(User).filter(User.id == user_id).first()
             if user and user.email:

@@ -1,10 +1,14 @@
 import { api } from './auth';
-import { 
-    CurrentUser, 
-    Role, 
-    Permission, 
+import {
+    CurrentUser,
+    Role,
+    Permission,
     ActivityLog,
-    Task
+    Task,
+    WorkerCreatePayload,
+    WorkerUpdatePayload,
+    RoleCreatePayload,
+    RoleUpdatePayload,
 } from '../types';
 
 export const managementService = {
@@ -14,12 +18,12 @@ export const managementService = {
         return res.data;
     },
 
-    createWorker: async (data: any): Promise<CurrentUser> => {
+    createWorker: async (data: WorkerCreatePayload): Promise<CurrentUser> => {
         const res = await api.post<CurrentUser>('/management/workers', data);
         return res.data;
     },
 
-    updateWorker: async (id: string, data: any): Promise<CurrentUser> => {
+    updateWorker: async (id: string, data: WorkerUpdatePayload): Promise<CurrentUser> => {
         const res = await api.patch<CurrentUser>(`/management/workers/${id}`, data);
         return res.data;
     },
@@ -30,12 +34,12 @@ export const managementService = {
         return res.data;
     },
 
-    createRole: async (data: any): Promise<Role> => {
+    createRole: async (data: RoleCreatePayload): Promise<Role> => {
         const res = await api.post<Role>('/management/roles', data);
         return res.data;
     },
 
-    updateRole: async (id: string, data: any): Promise<Role> => {
+    updateRole: async (id: string, data: RoleUpdatePayload): Promise<Role> => {
         const res = await api.patch<Role>(`/management/roles/${id}`, data);
         return res.data;
     },

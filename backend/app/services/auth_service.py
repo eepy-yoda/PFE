@@ -1,14 +1,17 @@
+import logging
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.services.user_service import user_service
 from app.schemas.auth import LoginRequest, Token
+
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
     @staticmethod
     def authenticate(db: Session, login_data: LoginRequest):
         from app.services.supabase_client import supabase
-        print(f"\n[LOGIN] Attempt for: {login_data.email}")
+        logger.info("[LOGIN] Attempt for: %s", login_data.email)
 
         # 1. Authenticate via Supabase — single source of truth for passwords
         try:
@@ -17,7 +20,7 @@ class AuthService:
                 "password": login_data.password,
             })
         except Exception as e:
-            print(f"[LOGIN] Supabase rejected credentials: {e}")
+            logger.warning("[LOGIN] Supabase rejected credentials: %s", e)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect email or password",
@@ -30,7 +33,7 @@ class AuthService:
             )
 
         session = auth_response.session
-        print(f"[LOGIN] Supabase OK — user ID: {auth_response.user.id}")
+        logger.info("[LOGIN] Supabase OK — user ID: %s", auth_response.user.id)
 
         # 2. Get local profile for role, name, etc.
         user = user_service.get_user_by_email(db, login_data.email)
@@ -44,7 +47,7 @@ class AuthService:
             user.is_verified = True
             db.commit()
 
-        print(f"[LOGIN] Token issued. Role: {user.role}")
+        logger.info("[LOGIN] Token issued. Role: %s", user.role)
         return Token(
             access_token=session.access_token,
             refresh_token=session.refresh_token,

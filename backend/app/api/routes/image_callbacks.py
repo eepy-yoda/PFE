@@ -62,7 +62,6 @@ async def receive_image_result(
     content_type = request.headers.get("content-type", "")
     hint = token[:8] + "..."
 
-    # ── Choice 1: Binary multipart upload ─────────────────────────────────────
     if "multipart/form-data" in content_type:
         form = await request.form()
         image = form.get("image")
@@ -78,7 +77,6 @@ async def receive_image_result(
             content_type=ct,
         )
 
-    # ── Choice 2: JSON body ────────────────────────────────────────────────────
     try:
         body = await request.json()
     except Exception:

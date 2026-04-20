@@ -28,7 +28,6 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/forgot-password")
 def forgot_password(request: ForgotPasswordRequest):
-    """Trigger Supabase's built-in password-reset email flow."""
     from app.services.supabase_client import supabase
     try:
         supabase.auth.reset_password_for_email(

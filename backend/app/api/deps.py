@@ -1,8 +1,11 @@
+import logging
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import Optional
 from uuid import UUID
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.db.session import get_db
@@ -25,10 +28,10 @@ def _validate_supabase_token(token: str):
         response = supabase.auth.get_user(token)
         user_id = str(response.user.id)
         user_email = response.user.email or ""
-        print(f"[AUTH] Token valid — Supabase user_id={user_id} email={user_email}")
+        logger.info("[AUTH] Token valid — Supabase user_id=%s email=%s", user_id, user_email)
         return user_id, user_email
     except Exception as e:
-        print(f"[AUTH] Token validation failed: {e}")
+        logger.warning("[AUTH] Token validation failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -50,12 +53,12 @@ def _lookup_user(db: Session, user_id: str, user_email: str) -> Optional[User]:
         return user
 
     if user_email:
-        print(f"[AUTH] UUID lookup miss for {user_id}, trying email fallback ({user_email})")
+        logger.info("[AUTH] UUID lookup miss for %s, trying email fallback (%s)", user_id, user_email)
         user = db.query(User).filter(User.email == user_email).first()
         if user:
-            print(f"[AUTH] Resolved user by email — local_id={user.id}, supabase_id={user_id}")
+            logger.info("[AUTH] Resolved user by email — local_id=%s, supabase_id=%s", user.id, user_id)
         else:
-            print(f"[AUTH] Email fallback also missed for {user_email}")
+            logger.warning("[AUTH] Email fallback also missed for %s", user_email)
     return user
 
 
@@ -65,7 +68,7 @@ def get_current_user(
     user_id, user_email = _validate_supabase_token(token)
     user = _lookup_user(db, user_id, user_email)
     if not user:
-        print(f"[AUTH] User not found — supabase_id={user_id} email={user_email}")
+        logger.warning("[AUTH] User not found — supabase_id=%s email=%s", user_id, user_email)
         raise HTTPException(status_code=404, detail="User not found")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")

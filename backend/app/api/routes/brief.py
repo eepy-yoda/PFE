@@ -25,6 +25,9 @@ from app.services.email_service import email_service
 
 router = APIRouter()
 
+# n8n signals brief completion with this status code
+N8N_COMPLETE_CODE = 333
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -103,8 +106,8 @@ def _call_n8n(payload: dict, headers: dict) -> dict:
 def _is_complete(n8n_data: dict) -> bool:
     return (
         n8n_data.get("mode") == "complete"
-        or n8n_data.get("code") == 333
-        or str(n8n_data.get("code", "")) == "333"
+        or n8n_data.get("code") == N8N_COMPLETE_CODE
+        or str(n8n_data.get("code", "")) == str(N8N_COMPLETE_CODE)
     )
 
 

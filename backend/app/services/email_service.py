@@ -11,25 +11,10 @@ class EmailService:
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_user = os.getenv("SMTP_USER")
-        self.smtp_password = os.getenv("SMTP_PASSWORD") # App Password for Gmail
+        self.smtp_password = os.getenv("SMTP_PASSWORD")
         self.from_email = os.getenv("FROM_EMAIL", self.smtp_user)
 
-    def send_verification_email(self, to_email: str, token: str):
-        # In a real app, this would be your frontend URL
-        verify_link = f"http://localhost:8000/api/v1/auth/verify/{token}"
-        subject = "Verify your AgencyFlow Account"
-        body = f"""
-        Hello!
-        
-        Thank you for joining AgencyFlow. Please click the link below to verify your email:
-        {verify_link}
-        
-        If you didn't create an account, please ignore this email.
-        """
-        return self._send(to_email, subject, body)
-
     def send_notification_email(self, to_email: str, subject: str, body: str):
-        """Generic method to send transactional notification emails"""
         full_body = f"""
         Hello,
 

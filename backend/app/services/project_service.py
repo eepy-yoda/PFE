@@ -19,7 +19,6 @@ class ProjectService:
     def get_projects(db: Session, user_id: UUID, role: str):
         from sqlalchemy import or_
         from app.models.task import Task
-        # We allow any manager or admin to see all projects
         if str(role) in ["UserRole.admin", "UserRole.manager", "admin", "manager"]:
             return db.query(Project).all()
         if str(role) == "employee" or str(role) == "UserRole.employee":

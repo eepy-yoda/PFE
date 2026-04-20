@@ -141,23 +141,6 @@ const Login: React.FC = () => {
 
                 <div className="relative z-10 max-w-lg space-y-8">
                     <h2 className="text-4xl font-bold leading-tight">Streamline Your Agency Operations</h2>
-                    <p className="text-blue-100 text-lg leading-relaxed">
-                        Join 200+ agencies already growing with AgencyFlow. Automate workflows, delight clients, and
-                        scale with confidence.
-                    </p>
-
-                    <div className="space-y-4 pt-4">
-                        {['40% faster delivery', '95% client satisfaction', '20+ hours saved weekly'].map(
-                            (item, idx) => (
-                                <div key={idx} className="flex items-center gap-3">
-                                    <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
-                                        <CheckCircle2 size={14} className="text-white" />
-                                    </div>
-                                    <span className="font-medium">{item}</span>
-                                </div>
-                            )
-                        )}
-                    </div>
                 </div>
             </div>
         </div>

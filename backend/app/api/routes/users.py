@@ -10,8 +10,6 @@ from app.services.user_service import user_service
 router = APIRouter()
 
 
-# ── CURRENT USER ──────────────────────────────────────────────────────────────
-
 @router.get("/me", response_model=UserRead)
 def read_user_me(current_user: User = Depends(get_current_user)):
     return current_user
@@ -42,7 +40,6 @@ def change_password(
 ):
     from app.services.supabase_client import supabase, supabase_admin
 
-    # 1. Verify current password via Supabase sign-in
     try:
         result = supabase.auth.sign_in_with_password({
             "email": current_user.email,
@@ -53,7 +50,6 @@ def change_password(
     except Exception:
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
-    # 2. Update password in Supabase via admin client
     if supabase_admin is None:
         raise HTTPException(status_code=503, detail="Admin client not configured (missing SUPABASE_SERVICE_KEY)")
     try:
@@ -66,8 +62,6 @@ def change_password(
 
     return {"message": "Password updated successfully"}
 
-
-# ── ADMIN ONLY ────────────────────────────────────────────────────────────────
 
 def _require_admin(current_user: User):
     if current_user.role != UserRole.admin:
@@ -89,7 +83,6 @@ def create_employee(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Admin creates an employee account directly."""
     _require_admin(current_user)
     existing = user_service.get_user_by_email(db, user_in.email)
     if existing:
@@ -110,7 +103,6 @@ def admin_update_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Admin updates user role or active status."""
     _require_admin(current_user)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -130,7 +122,6 @@ def deactivate_user(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Admin soft-deactivates a user account."""
     _require_admin(current_user)
     user = db.query(User).filter(User.id == user_id).first()
     if not user:

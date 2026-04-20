@@ -42,8 +42,6 @@ from app.services.activity_service import activity_service
 logger = logging.getLogger(__name__)
 
 
-# ── Helper: build brief_snapshot ──────────────────────────────────────────────
-
 def _build_brief_snapshot(project: Optional[Project]) -> Optional[str]:
     """
     Captures the exact brief content at submission time.
@@ -72,8 +70,6 @@ def _build_brief_snapshot(project: Optional[Project]) -> Optional[str]:
 
     return "\n".join(parts) if parts else None
 
-
-# ── Helper: send webhook ───────────────────────────────────────────────────────
 
 def _send_submission_webhook(
     *,
@@ -119,21 +115,14 @@ def _send_submission_webhook(
         "all_image_urls": file_urls,
     }
 
-    # ── PRIMARY: multipart/form-data ──────────────────────────────────────────
-    # Text fields go in data= → sent as plain text form parts (not binary).
-    # Binary files go in files= → sent as binary file parts.
-    # Mixing data= and files= in requests forces multipart/form-data for the
-    # whole request while preserving the text/binary distinction per field.
     try:
         meta_without_brief = {k: v for k, v in meta.items() if k != "brief"}
 
-        # Plain-text form fields
         text_fields = {
             "data":  json.dumps(meta_without_brief),
             "brief": brief_snapshot or "",
         }
 
-        # Binary file fields
         binary_files: list = []
         for url in file_urls:
             try:
@@ -159,7 +148,6 @@ def _send_submission_webhook(
     except Exception as mp_err:
         logger.warning("Multipart webhook failed (%s). Falling back to JSON+base64.", mp_err)
 
-    # ── FALLBACK: JSON + base64 images ────────────────────────────────────────
     images_b64: list[dict] = []
     for url in file_urls:
         entry: dict = {
@@ -192,8 +180,6 @@ def _send_submission_webhook(
     return None
 
 
-# ── Helper: parse AI webhook response ─────────────────────────────────────────
-
 def _parse_ai_webhook_response(raw_response) -> Optional[dict]:
     """
     Parses the n8n/Gemini AI webhook response into a normalized internal structure.
@@ -224,7 +210,6 @@ def _parse_ai_webhook_response(raw_response) -> Optional[dict]:
     if not raw_response:
         return None
 
-    # ── FORMAT 1: list from Gemini/n8n ────────────────────────────────────────
     if isinstance(raw_response, list):
         try:
             text = raw_response[0]["content"]["parts"][0]["text"]
@@ -272,10 +257,8 @@ def _parse_ai_webhook_response(raw_response) -> Optional[dict]:
 
         return _normalize_ai_result(parsed)
 
-    # ── FORMAT 2: direct dict (legacy or async callback) ──────────────────────
     if isinstance(raw_response, dict):
         raw_status = str(raw_response.get("status", "")).lower()
-        # Already in new normalized format?
         if raw_status in ("aligns", "does_not_align", "needs_revision", "error"):
             return _normalize_ai_result(raw_response)
         # Legacy format: {"status": "valid"/"invalid", ...}
@@ -298,7 +281,6 @@ def _empty_checks() -> dict:
 
 
 def _normalize_ai_result(parsed: dict) -> dict:
-    """Normalize any parsed AI JSON dict into the expected internal structure."""
     status = str(parsed.get("status", "error")).lower()
     if status not in ("aligns", "does_not_align", "needs_revision", "error"):
         status = "error"
@@ -314,13 +296,11 @@ def _normalize_ai_result(parsed: dict) -> dict:
         feedback = [feedback] if feedback.strip() else []
     elif not isinstance(feedback, list):
         feedback = []
-    # Ensure all items are strings
     feedback = [str(f) for f in feedback if f]
 
     checks = parsed.get("checks", {})
     if not isinstance(checks, dict):
         checks = {}
-    # Guarantee all expected check keys exist
     for key in _empty_checks():
         if key not in checks:
             checks[key] = "unknown"
@@ -365,8 +345,6 @@ def _normalize_legacy_response(data: dict) -> dict:
     }
 
 
-# ── Helper: process n8n inline response ───────────────────────────────────────
-
 def _apply_webhook_response(
     db: Session,
     submission: TaskSubmission,
@@ -383,13 +361,11 @@ def _apply_webhook_response(
       1. Gemini/Vertex AI list: [{content: {parts: [{text: "```json...```"}]}}]
       2. Legacy dict: {status: "valid"/"invalid", score: 0-100, feedback: "..."}
     """
-    # ── 1. Store raw response ──────────────────────────────────────────────────
     try:
         submission.webhook_response = json.dumps(raw_webhook_data)
     except (TypeError, ValueError):
         submission.webhook_response = str(raw_webhook_data)
 
-    # ── 2. Parse and normalize ────────────────────────────────────────────────
     normalized = _parse_ai_webhook_response(raw_webhook_data)
 
     if normalized is None:
@@ -399,13 +375,11 @@ def _apply_webhook_response(
         )
         return
 
-    # ── 3. Store normalized AI analysis result ────────────────────────────────
     try:
         submission.ai_analysis_result = json.dumps(normalized)
     except (TypeError, ValueError) as exc:
         logger.warning("Could not serialize normalized AI result: %s", exc)
 
-    # ── 4. Update score and feedback ──────────────────────────────────────────
     submission.ai_score = float(normalized["score"])
 
     feedback_lines = normalized.get("feedback", [])
@@ -413,7 +387,6 @@ def _apply_webhook_response(
     if feedback_text:
         submission.ai_feedback = feedback_text
 
-    # ── 5. Apply status + task state ──────────────────────────────────────────
     analysis_status = normalized["status"]
     score = normalized["score"]
 
@@ -477,8 +450,6 @@ def _apply_webhook_response(
     )
 
 
-# ── Main service ──────────────────────────────────────────────────────────────
-
 class SubmissionService:
 
     @staticmethod
@@ -487,18 +458,6 @@ class SubmissionService:
         submission_in: SubmissionCreateRequest,
         submitted_by: UUID,
     ) -> TaskSubmission:
-        """
-        Full submission pipeline:
-        1. Resolve task / project / employee context
-        2. Build brief_snapshot (immutable capture of brief at submission time)
-        3. Save TaskSubmission record (status=pending)
-        4. Update task.status = submitted
-        5. Fire webhook (multipart → fallback JSON+b64)
-        6. Process inline response if returned
-        7. Notify manager (always, unless already notified via validated inline response)
-        8. Return updated submission
-        """
-        # ── 1. Resolve context ────────────────────────────────────────────────
         task = db.query(Task).filter(Task.id == submission_in.task_id).first()
         project = (
             db.query(Project).filter(Project.id == task.project_id).first()
@@ -510,13 +469,10 @@ class SubmissionService:
         project_name = project.name if project else "Unknown Project"
         task_title = task.title if task else "Unknown Task"
 
-        # ── 2. Build brief_snapshot ───────────────────────────────────────────
         brief_snapshot = _build_brief_snapshot(project)
 
-        # ── 3. Save submission record ─────────────────────────────────────────
         file_urls: list[str] = submission_in.file_paths or []
 
-        # Compute attempt number: how many prior submissions by this worker for this task
         prior_count = (
             db.query(TaskSubmission)
             .filter(
@@ -539,7 +495,6 @@ class SubmissionService:
         )
         db.add(db_submission)
 
-        # ── 4. Mark task as submitted ─────────────────────────────────────────
         if task:
             task.status = TaskStatus.submitted
 
@@ -554,7 +509,6 @@ class SubmissionService:
         db.commit()
         db.refresh(db_submission)
 
-        # ── 5. Fire webhook ───────────────────────────────────────────────────
         # SUBMISSION_REVIEW_WEBHOOK_URL takes precedence; falls back to legacy N8N_WORK_SUBMISSION_WEBHOOK
         _webhook_url = settings.SUBMISSION_REVIEW_WEBHOOK_URL or settings.N8N_WORK_SUBMISSION_WEBHOOK
         if _webhook_url:
@@ -572,8 +526,6 @@ class SubmissionService:
                     file_urls=file_urls,
                 )
 
-                # ── 6. Process inline response ────────────────────────────────
-                # Accept both dict (legacy) and list (Gemini/Vertex AI via n8n)
                 if webhook_resp is not None:
                     _apply_webhook_response(
                         db=db,
@@ -596,7 +548,6 @@ class SubmissionService:
                 db_submission.id,
             )
 
-        # ── 7. Manager notification (only if still pending — not yet notified) ─
         if task and task.created_by and db_submission.submission_status == SubmissionStatus.pending:
             notification_service.create(
                 db,
@@ -631,10 +582,6 @@ class SubmissionService:
         score: Optional[float],
         feedback: Optional[str],
     ) -> Optional[TaskSubmission]:
-        """
-        Called by the async n8n callback route.
-        Applies the validation result, updates task + notifications.
-        """
         submission = db.query(TaskSubmission).filter(TaskSubmission.id == submission_id).first()
         task = db.query(Task).filter(Task.id == task_id).first()
 

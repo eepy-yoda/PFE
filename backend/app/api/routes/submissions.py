@@ -1,14 +1,3 @@
-"""
-routes/submissions.py
-──────────────────────
-Dedicated submission routes — rebuilt from scratch.
-
-Routes:
-  POST /submissions/{task_id}/submit  — employee submits work
-  GET  /submissions/{task_id}/        — list submissions for a task
-  POST /submissions/webhook-callback  — async n8n callback (X-Webhook-Secret required)
-"""
-
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Form, File, UploadFile, Request
@@ -38,8 +27,6 @@ def _require_manager_or_above(user: User) -> None:
         raise HTTPException(status_code=403, detail="Manager or Admin required")
 
 
-# ── POST /submissions/{task_id}/submit ─────────────────────────────────────────
-
 @router.post("/{task_id}/submit", response_model=SubmissionRead, status_code=201)
 def submit_work(
     task_id: UUID,
@@ -47,30 +34,19 @@ def submit_work(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Employee submits work for a task.
-
-    Flow:
-      1. Validates task exists + employee is assigned
-      2. Injects task_id into request body
-      3. Delegates to submission_service.create_submission()
-         which handles: brief_snapshot, webhook, notifications
-    """
     _require_employee_or_above(current_user)
 
     task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Employees can only submit their own task
     if (
         current_user.role == UserRole.employee
         and task.assigned_to != current_user.id
     ):
         raise HTTPException(status_code=403, detail="You are not assigned to this task")
 
-    # Validation: submission must have at least one piece of content
-    body.task_id = task_id  # inject from path param
+    body.task_id = task_id
 
     if not any([body.content, body.links, body.file_paths]):
         raise HTTPException(
@@ -80,8 +56,6 @@ def submit_work(
 
     return submission_service.create_submission(db, body, current_user.id)
 
-
-# ── GET /submissions/{task_id}/ ───────────────────────────────────────────────
 
 @router.get("/{task_id}/", response_model=List[SubmissionRead])
 def list_submissions(
@@ -108,7 +82,6 @@ def list_submissions(
         if not has_task and (not proj or proj.assigned_to != current_user.id):
             raise HTTPException(status_code=403, detail="Access denied")
 
-    # Clients may only access their own project's submissions
     if current_user.role == UserRole.client:
         from app.models.project import DeliveryState
         project = db.query(Project).filter(Project.id == task.project_id).first()
@@ -141,8 +114,6 @@ def list_submissions(
     return submissions
 
 
-# ── POST /submissions/webhook-callback ────────────────────────────────────────
-
 @router.post("/webhook-callback", response_model=SubmissionRead)
 def receive_webhook_callback(
     payload: WebhookCallbackPayload,
@@ -166,7 +137,6 @@ def receive_webhook_callback(
     On "valid"  → submission_status=validated, task=approved, notify manager
     On "invalid" → submission_status=rejected, task=revision_requested, notify employee
     """
-    # ── Secret validation ──
     expected = settings.N8N_WEBHOOK_SECRET
     if not expected or x_webhook_secret != expected:
         raise HTTPException(status_code=403, detail="Invalid or missing webhook secret")
@@ -185,8 +155,6 @@ def receive_webhook_callback(
 
     return result
 
-
-# ── POST /submissions/watermark-callback ──────────────────────────────────────
 
 @router.post("/watermark-callback", response_model=SubmissionRead)
 def receive_watermark_callback(
@@ -239,10 +207,7 @@ def receive_watermark_callback(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
-    print(f"DEBUG: Found submission={submission.id}, task={task.id}, project={project.id}")
-
     if payload.image_path:
-        # ── PATH CALLBACK: Store raw path + construct public URL ───
         image_path = payload.image_path
         parts = image_path.split("/", 1)
         bucket = parts[0] if len(parts) > 1 else "task-submissions"
@@ -253,7 +218,6 @@ def receive_watermark_callback(
         submission.watermarked_file_paths = json.dumps([public_url])
         submission.watermark_file_path = image_path
     elif payload.files:
-        # ── BINARY CALLBACK: Upload files and get URLs ───
         public_urls: list[str] = []
         for f in payload.files:
             try:
@@ -282,8 +246,6 @@ def receive_watermark_callback(
     db.refresh(submission)
     return submission
 
-
-# ── POST /submissions/watermark-callback-binary (multipart/form-data) ─────────
 
 @router.post("/watermark-callback-binary", response_model=SubmissionRead)
 async def receive_watermark_callback_binary(
@@ -350,8 +312,6 @@ async def receive_watermark_callback_binary(
     db.refresh(submission)
     return submission
 
-
-# ── POST /submissions/watermark-callback-raw (raw binary body) ────────────────
 
 @router.post("/watermark-callback-raw", response_model=SubmissionRead)
 async def receive_watermark_callback_raw(

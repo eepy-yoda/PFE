@@ -6,17 +6,17 @@ const Footer: React.FC = () => {
             <div className="container mx-auto px-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 mb-16">
                     {/* Brand Column */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <div className="flex items-center gap-2">
+                    <div className="lg:col-span-5 flex flex-col items-center text-center space-y-6">
+                        <div className="flex items-center justify-center gap-2">
                             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white">
                                 <Rocket size={16} fill="currentColor" />
                             </div>
                             <span className="text-lg font-bold text-gray-900 dark:text-white">AgencyFlow</span>
                         </div>
-                        <p className="text-gray-500 dark:text-gray-400 leading-relaxed max-w-sm">
+                        <p className="text-gray-500 dark:text-gray-400 leading-relaxed max-w-md mx-auto">
                             The all-in-one platform designed to help digital agencies streamline workflows, manage clients, and scale their business effortlessly.
                         </p>
-                        <div className="flex gap-4">
+                        <div className="flex justify-center gap-4">
                             {[Twitter, Linkedin, Facebook, Instagram].map((Icon: LucideIcon, idx: number) => (
                                 <a
                                     key={idx}
@@ -30,50 +30,13 @@ const Footer: React.FC = () => {
                     </div>
 
                     {/* Links Columns */}
-                    <div>
-                        <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-6">Product</h4>
-                        <ul className="space-y-4">
-                            {['Features', 'Pricing', 'Integrations', 'Changelog', 'Docs'].map((item) => (
-                                <li key={item}>
-                                    <a href="#" className="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors">{item}</a>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    <div>
-                        <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-6">Company</h4>
-                        <ul className="space-y-4">
-                            {['About Us', 'Careers', 'Blog', 'Contact', 'Partners'].map((item) => (
-                                <li key={item}>
-                                    <a href="#" className="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors">{item}</a>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    <div>
-                        <h4 className="font-semibold text-gray-900 dark:text-gray-100 mb-6">Legal</h4>
-                        <ul className="space-y-4">
-                            {['Privacy Policy', 'Terms of Service', 'Cookie Policy', 'Security'].map((item) => (
-                                <li key={item}>
-                                    <a href="#" className="text-gray-500 dark:text-gray-400 hover:text-primary dark:hover:text-primary transition-colors">{item}</a>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
                 </div>
 
                 {/* Bottom Bar */}
-                <div className="pt-8 border-t border-gray-200 dark:border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div className="pt-8 border-t border-gray-200 dark:border-gray-800 flex justify-center items-center">
                     <p className="text-gray-400 dark:text-gray-500 text-sm">
                         © {new Date().getFullYear()} AgencyFlow Inc. All rights reserved.
                     </p>
-                    <div className="flex gap-8">
-                        <a href="#" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm">Privacy</a>
-                        <a href="#" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm">Terms</a>
-                        <a href="#" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 text-sm">Cookies</a>
-                    </div>
                 </div>
             </div>
         </footer>

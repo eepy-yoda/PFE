@@ -18,7 +18,6 @@ from app.api.deps import get_current_user
 
 router = APIRouter()
 
-# --- Worker Management ---
 
 @router.get("/workers", response_model=List[UserRead])
 def list_workers(
@@ -27,7 +26,6 @@ def list_workers(
 ):
     if current_user.role not in [UserRole.admin, UserRole.manager]:
         raise HTTPException(status_code=403, detail="Not authorized")
-    # Return all users with role 'employee' or 'manager'
     return db.query(User).filter(User.role.in_([UserRole.employee, UserRole.manager])).all()
 
 @router.post("/workers", response_model=UserRead)
@@ -39,7 +37,6 @@ def create_worker(
     if current_user.role not in [UserRole.admin, UserRole.manager]:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    # Check if exists
     if user_service.get_user_by_email(db, worker_in.email):
         raise HTTPException(status_code=400, detail="User already exists")
     
@@ -54,7 +51,6 @@ def create_worker(
     new_user_info = user_service.create_user(db, user_data)
     new_user = db.query(User).filter(User.id == new_user_info["id"]).first()
     
-    # Assign specific Roles if ids provided
     if worker_in.role_ids:
         roles = db.query(Role).filter(Role.id.in_(worker_in.role_ids)).all()
         new_user.assigned_roles = roles
@@ -97,7 +93,6 @@ def update_worker(
     
     return db_user
 
-# --- Role & Permission Management ---
 
 @router.get("/roles", response_model=List[RoleRead])
 def list_roles(db: Session = Depends(get_db)):
@@ -117,7 +112,6 @@ def create_role(
 def list_permissions(db: Session = Depends(get_db)):
     return rbac_service.get_permissions(db)
 
-# --- Activity Monitoring ---
 
 @router.get("/logs", response_model=List[ActivityLogRead])
 def list_logs(
@@ -130,7 +124,6 @@ def list_logs(
         raise HTTPException(status_code=403, detail="Not authorized")
     return activity_service.get_logs(db, skip, limit)
 
-# --- Task Management ---
 
 @router.get("/tasks", response_model=List[TaskRead])
 def list_all_tasks(

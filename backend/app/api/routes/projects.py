@@ -35,10 +35,6 @@ class BriefActionRequest(BaseModel):
     notes: Optional[str] = None
 
 
-class ProjectMarkPaidRequest(BaseModel):
-    pass
-
-
 class ConvertProjectRequest(BaseModel):
     assigned_to: Optional[UUID] = None
 

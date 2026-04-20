@@ -12,25 +12,21 @@ from app.services.notification_service import notification_service
 from app.services.task_service import task_service
 
 def _run_startup_db_tasks():
-    """Run create_all + inline migrations in the background after uvicorn has bound.
-    All failures are non-fatal — the app serves requests regardless."""
     from sqlalchemy import text
 
-    # 1. Ensure all tables exist
     try:
         Base.metadata.create_all(bind=engine)
         print("[Startup] Tables ensured via create_all.")
     except Exception as e:
         print(f"[Startup] Warning: create_all failed (DB may be paused): {e}")
 
-    # 2. Inline migrations (idempotent DDL)
     migrations = [
         ("projects.saved_answers",
          "ALTER TABLE projects ADD COLUMN IF NOT EXISTS saved_answers TEXT",
          False),
         ("briefstatus enum: interrupted",
          "ALTER TYPE briefstatus ADD VALUE IF NOT EXISTS 'interrupted'",
-         True),  # PostgreSQL only
+         True),
         ("task_submissions.submissionstatus type",
          "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'submissionstatus') THEN CREATE TYPE submissionstatus AS ENUM ('pending', 'validated', 'rejected'); END IF; END $$",
          True),
@@ -118,6 +114,7 @@ async def late_task_checker():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Run DB startup tasks in a thread so they never block the event loop
+    # Run DB startup tasks in a thread so they never block the event loop
     loop = asyncio.get_event_loop()
     loop.run_in_executor(None, _run_startup_db_tasks)
 
@@ -137,11 +134,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS configuration
 origins = [
-    "http://localhost:5173", # Vite default
+    "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "http://localhost:3000", # Common alternative
+    "http://localhost:3000",
 ]
 
 app.add_middleware(
@@ -152,14 +148,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.middleware("http")
-async def log_requests(request, call_next):
-    print(f"DEBUG: Incoming {request.method} request to {request.url.path}")
-    response = await call_next(request)
-    print(f"DEBUG: Response status: {response.status_code}")
-    return response
-
-# Register routes
 app.include_router(auth.router, prefix=f"{settings.API_V1_STR}/auth", tags=["auth"])
 app.include_router(users.router, prefix=f"{settings.API_V1_STR}/users", tags=["users"])
 app.include_router(projects.router, prefix=f"{settings.API_V1_STR}/projects", tags=["projects"])

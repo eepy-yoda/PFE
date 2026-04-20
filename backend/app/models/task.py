@@ -49,11 +49,10 @@ class Task(Base):
     assigned_to = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True, index=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
-    priority = Column(String, default="medium") # added priority
+    priority = Column(String, default="medium")
     deadline = Column(DateTime(timezone=True), nullable=True)
     order_index = Column(Integer, default=0)
 
-    # Payment and Delivery
     payment_status = Column(SQLEnum(PaymentStatus, name="task_paymentstatus", create_type=True), default=PaymentStatus.unpaid)
     amount_paid = Column(Float, nullable=True, default=0.0)
     final_delivered_at = Column(DateTime(timezone=True), nullable=True)
@@ -84,13 +83,12 @@ class TaskSubmission(Base):
     task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=False)
     submitted_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
-    content = Column(Text, nullable=True)          # Text description of work done
+    content = Column(Text, nullable=True)
     links = Column(Text, nullable=True)            # JSON list of URLs
     file_paths = Column(Text, nullable=True)             # JSON list of file paths/keys
     watermarked_file_paths = Column(Text, nullable=True) # JSON list of watermarked preview URLs (set by n8n callback)
     watermark_file_path = Column(Text, nullable=True)    # Raw storage path received from webhook (e.g. task-submissions/preview/...)
 
-    # ── Submission Status (replaces boolean is_approved for richer state) ─────
     submission_status = Column(
         SQLEnum(SubmissionStatus, name="submissionstatus", create_type=True),
         default=SubmissionStatus.pending,
@@ -102,7 +100,6 @@ class TaskSubmission(Base):
     # even if the brief is later edited.
     brief_snapshot = Column(Text, nullable=True)
 
-    # ── Webhook response: raw JSON from n8n validation ──────────────────────
     webhook_response = Column(Text, nullable=True)
 
     # ── Parsed + normalized AI analysis result (JSON) ─────────────────────
@@ -112,7 +109,6 @@ class TaskSubmission(Base):
     ai_score = Column(Float, nullable=True)        # 0-100
     ai_feedback = Column(Text, nullable=True)
 
-    # Attempt number: 1 for first submission, increments on each re-submission
     attempt_number = Column(Integer, default=1, nullable=False)
 
     # Kept for backward compatibility — mirrors submission_status == validated
@@ -122,15 +118,6 @@ class TaskSubmission(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    # ── DB MIGRATION (run once on existing databases) ─────────────────────────
-    # PostgreSQL / Supabase:
-    #   CREATE TYPE submissionstatus AS ENUM ('pending', 'validated', 'rejected');
-    #   ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS submission_status submissionstatus DEFAULT 'pending' NOT NULL;
-    #   ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS brief_snapshot TEXT;
-    #   ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS webhook_response TEXT;
-    #   ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS watermarked_file_paths TEXT;
-    # SQLite (dev): drop & recreate (no existing data concern in dev)
-    # ─────────────────────────────────────────────────────────────────────────
 
 
 class TaskFeedback(Base):

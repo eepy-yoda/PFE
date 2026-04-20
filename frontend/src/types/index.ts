@@ -200,6 +200,35 @@ export interface TaskFeedback {
     created_at: string;
 }
 
+// ── Management payloads ──────────────────────────────────────────────────────
+
+export interface WorkerCreatePayload {
+    email: string;
+    full_name: string;
+    password: string;
+    role: UserRole;
+    role_ids?: string[];
+}
+
+export interface WorkerUpdatePayload {
+    role?: UserRole;
+    is_active?: boolean;
+    role_ids?: string[];
+}
+
+export interface RoleCreatePayload {
+    name: string;
+    description?: string;
+    is_system?: boolean;
+    permission_ids?: string[];
+}
+
+export interface RoleUpdatePayload {
+    name?: string;
+    description?: string;
+    permission_ids?: string[];
+}
+
 // ── Activity ─────────────────────────────────────────────────────────────────
 
 export interface ActivityLog {

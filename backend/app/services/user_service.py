@@ -1,9 +1,12 @@
+import logging
 from sqlalchemy.orm import Session
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
 from fastapi import HTTPException
 
 from app.services.supabase_client import supabase, supabase_admin
+
+logger = logging.getLogger(__name__)
 
 
 class UserService:
@@ -17,10 +20,10 @@ class UserService:
 
     @staticmethod
     def create_user(db: Session, user_in: UserCreate):
-        print(f"\n[SIGNUP] New registration request for: {user_in.email}")
+        logger.info("[SIGNUP] New registration request for: %s", user_in.email)
 
         try:
-            print(f"[SIGNUP] Step 1: Registering with Supabase Auth...")
+            logger.info("[SIGNUP] Step 1: Registering with Supabase Auth...")
             role_str = user_in.role.value if hasattr(user_in.role, "value") else str(user_in.role)
 
             auth_response = supabase.auth.sign_up({
@@ -35,16 +38,16 @@ class UserService:
             })
 
             if not auth_response.user:
-                print(f"[SIGNUP] Supabase Auth did not return a user record.")
+                logger.warning("[SIGNUP] Supabase Auth did not return a user record.")
                 raise HTTPException(
                     status_code=400,
                     detail="Supabase Auth rejected this email (it may already exist).",
                 )
 
-            print(f"[SIGNUP] Supabase Auth success (ID: {auth_response.user.id})")
+            logger.info("[SIGNUP] Supabase Auth success (ID: %s)", auth_response.user.id)
 
             # Insert local profile — no password stored here; Supabase owns credentials
-            print(f"[SIGNUP] Step 2: Inserting local profile...")
+            logger.info("[SIGNUP] Step 2: Inserting local profile...")
             try:
                 new_db_user = User(
                     id=auth_response.user.id,
@@ -58,9 +61,9 @@ class UserService:
                 db.add(new_db_user)
                 db.commit()
                 db.refresh(new_db_user)
-                print(f"[SIGNUP] Local profile saved.")
+                logger.info("[SIGNUP] Local profile saved.")
             except Exception as db_err:
-                print(f"[SIGNUP] DB insert failed: {db_err}")
+                logger.error("[SIGNUP] DB insert failed: %s", db_err)
                 db.rollback()
                 raise HTTPException(status_code=500, detail=f"Database error: {db_err}")
 
@@ -77,13 +80,8 @@ class UserService:
         except HTTPException:
             raise
         except Exception as e:
-            print(f"[SIGNUP] Critical error: {e}")
+            logger.error("[SIGNUP] Critical error: %s", e)
             raise HTTPException(status_code=500, detail=str(e))
-
-    @staticmethod
-    def get_user_by_token(db: Session, token: str):
-        """Legacy — kept for any remaining verification_token lookups."""
-        return db.query(User).filter(User.verification_token == token).first()
 
     @staticmethod
     def update_user(db: Session, db_user: User, user_in: UserUpdate):

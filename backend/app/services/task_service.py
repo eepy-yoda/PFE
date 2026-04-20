@@ -1,28 +1,15 @@
-import json
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from uuid import UUID
 from typing import List, Optional
 
-from app.models.task import Task, TaskStatus, TaskSubmission, SubmissionStatus, TaskFeedback
+from app.models.task import Task, TaskStatus, TaskSubmission, TaskFeedback
 from app.models.project import Project
 from app.models.notification import NotificationType
 from app.schemas.task import TaskCreate, TaskUpdate, TaskSubmissionCreate, TaskFeedbackCreate
 from app.schemas.submission import SubmissionCreateRequest
 from app.services.notification_service import notification_service
 from app.services.activity_service import activity_service
-
-
-def _send_submission_webhook(*args, **kwargs) -> Optional[dict]:
-    """Deprecated stub — logic moved to submission_service._send_submission_webhook."""
-    return None
-
-
-
-# NOTE: The webhook helper previously located here has been extracted to
-# app/services/submission_service.py :: _send_submission_webhook()
-# task_service.submit_work() now delegates to submission_service.create_submission().
-
 
 
 class TaskService:
@@ -120,12 +107,6 @@ class TaskService:
         return _svc.create_submission(db, req, submitted_by)
 
     @staticmethod
-    def _submit_work_ORIGINAL_REMOVED(*_args, **_kwargs) -> None:
-        """Archived — see submission_service.py :: SubmissionService.create_submission()."""
-
-
-
-    @staticmethod
     def get_submissions_for_task(db: Session, task_id: UUID) -> List[TaskSubmission]:
         return (
             db.query(TaskSubmission)
@@ -141,7 +122,7 @@ class TaskService:
         score: float,
         feedback: str,
         manager_id: UUID,
-    ) -> TaskSubmission:
+    ) -> Optional[TaskSubmission]:
         submission = db.query(TaskSubmission).filter(TaskSubmission.id == submission_id).first()
         if not submission:
             return None

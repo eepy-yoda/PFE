@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Sparkles, Briefcase, Rocket, LogOut, Bell, Settings } from 'lucide-react';
-import useDashboardViewModel from '../../viewmodels/useDashboardViewModel';
+import { Sparkles, Briefcase } from 'lucide-react';
+
 
 const ActionCard: React.FC<{
     title: string;
@@ -40,38 +40,9 @@ const ActionCard: React.FC<{
 
 const ClientHome: React.FC = () => {
     const navigate = useNavigate();
-    const { handleLogout } = useDashboardViewModel();
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-blue-50/30 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 transition-colors duration-300">
-            {/* Header */}
-            <header className="bg-white/80 dark:bg-gray-950/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 sticky top-0 z-50">
-                <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-primary to-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg">
-                            <Rocket size={20} fill="currentColor" />
-                        </div>
-                        <span className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">AgencyFlow</span>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        <button className="p-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-                            <Bell size={22} />
-                        </button>
-                        <button className="p-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-                            <Settings size={22} />
-                        </button>
-                        <div className="h-6 w-px bg-gray-200 dark:bg-gray-800 mx-2" />
-                        <button
-                            onClick={handleLogout}
-                            className="flex items-center gap-2 px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors font-medium"
-                        >
-                            <LogOut size={20} />
-                            <span>Logout</span>
-                        </button>
-                    </div>
-                </div>
-            </header>
 
             <main className="max-w-5xl mx-auto px-6 py-16 lg:py-24">
                 {/* Hero Section */}

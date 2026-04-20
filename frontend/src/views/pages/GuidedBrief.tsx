@@ -11,14 +11,8 @@ import {
     UNANSWERED_PLACEHOLDER,
     BriefSeed, BriefField, SavedAnswer,
 } from '../../api/brief';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { cn } from '../../lib/utils';
 
-function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
-}
-
-// localStorage key template for offline backup
 const LS_KEY = (id: string) => `brief_backup_${id}`;
 
 type Step = 'initial' | 'chat' | 'complete';
@@ -733,6 +727,3 @@ const GuidedBrief: React.FC = () => {
 };
 
 export default GuidedBrief;
-
-// Read the API URL from the Vite env so sendBeacon can use it in beforeunload
-const settings_apiUrl: string | undefined = (import.meta as any).env?.VITE_API_URL;

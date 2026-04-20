@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 class DeliveryService:
     def process_project_payment_update(self, db: Session, project: Project):
-        """Called when project payment state changes"""
         if project.payment_type != PaymentType.project:
             return
 
@@ -22,9 +21,7 @@ class DeliveryService:
         tasks = db.query(Task).filter(Task.project_id == project.id).all()
 
         if project.payment_status == PaymentStatus.fully_paid:
-            # Upgrade all applicable tasks to final_delivered
             for task in tasks:
-                # only deliver approved submissions
                 submission = db.query(TaskSubmission).filter(
                     TaskSubmission.task_id == task.id,
                     TaskSubmission.is_approved == True
@@ -47,7 +44,6 @@ class DeliveryService:
                             task_id=task.id
                         )
 
-            # Notify manager
             notification_service.create(
                 db,
                 user_id=project.manager_id,
@@ -63,11 +59,6 @@ class DeliveryService:
 
 
     def deliver_task_watermark(self, db: Session, task: Task, project: Project):
-        """Trigger watermark delivery via Webhook"""
-
-        # ── Guard 1: payment must be partially_paid ───────────────────────────
-        # For task-mode: the task itself must be partially paid.
-        # For project-mode: the project must be partially paid.
         if project.payment_type == PaymentType.task:
             if task.payment_status != PaymentStatus.partially_paid:
                 logger.info(

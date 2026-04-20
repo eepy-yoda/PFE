@@ -35,21 +35,7 @@ const Signup: React.FC = () => {
                 </div>
 
                 <div className="relative z-10 max-w-lg space-y-8">
-                    <h2 className="text-4xl font-bold leading-tight">Start Your Free Trial Today</h2>
-                    <p className="text-blue-100 text-lg leading-relaxed">
-                        No credit card required. Get started in under 60 seconds.
-                    </p>
-
-                    <div className="space-y-4 pt-4">
-                        {['14-day free trial', 'No credit card required', 'Cancel anytime', 'Full feature access'].map(
-                            (item, idx) => (
-                                <div key={idx} className="flex items-center gap-3">
-                                    <div className="w-2 h-2 rounded-full bg-white"></div>
-                                    <span className="font-medium text-lg">{item}</span>
-                                </div>
-                            )
-                        )}
-                    </div>
+                    <h2 className="text-4xl font-bold leading-tight">Automate Your Agency</h2>
                 </div>
             </div>
 
@@ -91,7 +77,6 @@ const Signup: React.FC = () => {
                                     AgencyFlow
                                 </h2>
                                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Create Your Account</h1>
-                                <p className="mt-2 text-gray-500 dark:text-gray-400">Start your 14-day free trial</p>
                             </div>
 
                             {error && (
@@ -168,17 +153,6 @@ const Signup: React.FC = () => {
                                     {isLoading ? <Loader2 size={20} className="animate-spin" /> : 'Start Free Trial'}
                                 </button>
                             </form>
-
-                            <div className="text-center pt-2 text-xs text-gray-400">
-                                By signing up, you agree to our{' '}
-                                <a href="#" className="underline hover:text-gray-600">
-                                    Terms of Service
-                                </a>{' '}
-                                and{' '}
-                                <a href="#" className="underline hover:text-gray-600">
-                                    Privacy Policy
-                                </a>
-                            </div>
 
                             <div className="text-center pt-2">
                                 <p className="text-gray-500 dark:text-gray-400 text-sm">
