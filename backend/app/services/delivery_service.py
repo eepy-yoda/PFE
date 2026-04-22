@@ -76,7 +76,6 @@ class DeliveryService:
                 )
                 return
 
-        # ── Guard 2: prevent re-delivery ─────────────────────────────────────
         if task.delivery_state in [DeliveryState.watermark_delivered, DeliveryState.final_delivered]:
             logger.info(
                 "[DeliveryService] Watermark skipped — already delivered  "
@@ -85,7 +84,6 @@ class DeliveryService:
             )
             return
 
-        # ── Guard 3: approved submission with files must exist ────────────────
         submission = db.query(TaskSubmission).filter(
             TaskSubmission.task_id == task.id,
             TaskSubmission.is_approved == True,
@@ -132,7 +130,6 @@ class DeliveryService:
         task.delivery_state = DeliveryState.watermark_delivered
         task.watermarked_delivered_at = datetime.now(timezone.utc)
 
-        # Trigger webhook
         webhook_url = getattr(settings, 'WATERMARK_WEBHOOK_URL', None)
         if not webhook_url:
             webhook_url = (
@@ -140,7 +137,7 @@ class DeliveryService:
                 or getattr(settings, 'N8N_WORK_SUBMISSION_WEBHOOK', None)
             )
 
-        n8n_response = None  # will hold the requests.Response if the call succeeds
+        n8n_response = None
 
         if webhook_url:
             payload = {
@@ -270,7 +267,6 @@ class DeliveryService:
 
 
     def process_task_payment_update(self, db: Session, task: Task, project: Project):
-        """Called when task payment state changes (Task mode)"""
         if project.payment_type != PaymentType.task:
             return
 

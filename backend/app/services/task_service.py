@@ -53,7 +53,24 @@ class TaskService:
 
     @staticmethod
     def get_tasks_for_employee(db: Session, user_id: UUID) -> List[Task]:
-        return db.query(Task).filter(Task.assigned_to == user_id).all()
+        from app.models.task import task_assignments as _ta
+        from sqlalchemy import or_, select as sa_select
+
+        junction_subq = (
+            sa_select(_ta.c.task_id)
+            .where(_ta.c.user_id == user_id)
+            .scalar_subquery()
+        )
+        return (
+            db.query(Task)
+            .filter(
+                or_(
+                    Task.assigned_to == user_id,
+                    Task.id.in_(junction_subq),
+                )
+            )
+            .all()
+        )
 
     @staticmethod
     def get_task(db: Session, task_id: UUID) -> Optional[Task]:

@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 from app.db.session import get_db
 from app.api.deps import get_current_user, get_current_user_optional
 from app.core.config import settings
 from app.models.user import User, UserRole
-from app.models.task import Task
+from app.models.task import Task, TaskFeedback as TaskFeedbackModel
 from app.models.project import Project
 from app.schemas.task import (
     TaskCreate, TaskUpdate, TaskRead,
@@ -14,7 +14,7 @@ from app.schemas.task import (
     TaskFeedbackCreate, TaskFeedbackRead,
     AIReviewResult, SubmissionWebhookResult,
 )
-from app.models.task import SubmissionStatus
+from app.models.task import SubmissionStatus, TaskSubmission as TaskSubmissionModel
 from app.services.task_service import task_service
 from app.services.delivery_service import delivery_service
 from app.models.project import PaymentStatus, PaymentType, DeliveryState
@@ -41,8 +41,6 @@ def _employee_has_project_access(db: Session, user_id, project_id) -> bool:
     return proj is not None and proj.assigned_to == user_id
 
 
-# ── TASK CRUD ─────────────────────────────────────────────────────────────────
-
 @router.post("/", response_model=TaskRead)
 def create_task(
     task_in: TaskCreate,
@@ -59,7 +57,6 @@ def list_tasks_for_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # Access check: manager must own project, employee must be assigned to it
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -73,8 +70,211 @@ def list_my_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Employee: get all tasks assigned to me"""
     return task_service.get_tasks_for_employee(db, current_user.id)
+
+
+@router.get("/worker-summary")
+def get_worker_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Aggregated dashboard stats for the current worker."""
+    _require_employee_or_above(current_user)
+    from app.models.activity import ActivityLog
+    from app.services.time_tracking_service import time_tracking_service
+
+    tasks = task_service.get_tasks_for_employee(db, current_user.id)
+    now = datetime.now(timezone.utc)
+
+    def _is_overdue(t: Task) -> bool:
+        return t.deadline is not None and t.deadline.replace(tzinfo=timezone.utc) < now and t.status not in ("completed", "approved")
+
+    def _is_due_today(t: Task) -> bool:
+        if not t.deadline:
+            return False
+        dl = t.deadline.replace(tzinfo=timezone.utc)
+        return dl.date() == now.date() and t.status not in ("completed", "approved")
+
+    overdue = [t for t in tasks if _is_overdue(t)]
+    due_today = [t for t in tasks if _is_due_today(t) and not _is_overdue(t)]
+    in_revision = [t for t in tasks if t.status == "revision_requested"]
+    submitted = [t for t in tasks if t.status in ("submitted", "under_ai_review")]
+    completed = [t for t in tasks if t.status in ("completed", "approved")]
+    active = [t for t in tasks if t.status in ("todo", "in_progress")]
+
+    # Priority tasks: overdue first, then due today, then in_revision, then due within 7 days
+    from datetime import timedelta
+    week_out = now + timedelta(days=7)
+    due_soon = [
+        t for t in tasks
+        if t.deadline
+        and now < t.deadline.replace(tzinfo=timezone.utc) <= week_out
+        and t.status not in ("completed", "approved", "submitted", "under_ai_review")
+        and not _is_due_today(t)
+    ]
+    priority_task_ids = {t.id for t in overdue + due_today + in_revision + due_soon}
+    priority_tasks = (
+        overdue + due_today + in_revision +
+        [t for t in due_soon if t.id not in {x.id for x in overdue + due_today + in_revision}]
+    )
+
+    # Recent feedback for current worker
+    recent_feedback = (
+        db.query(TaskFeedbackModel)
+        .filter(TaskFeedbackModel.sent_to == current_user.id)
+        .order_by(TaskFeedbackModel.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    # Upcoming deadlines (next 14 days, not completed)
+    two_weeks = now + timedelta(days=14)
+    upcoming = [
+        t for t in tasks
+        if t.deadline
+        and now <= t.deadline.replace(tzinfo=timezone.utc) <= two_weeks
+        and t.status not in ("completed", "approved")
+    ]
+    upcoming.sort(key=lambda t: t.deadline)
+
+    time_summary = time_tracking_service.get_summary(db, current_user.id)
+
+    def _task_to_dict(t: Task) -> dict:
+        return {
+            "id": str(t.id),
+            "title": t.title,
+            "status": t.status,
+            "priority": t.priority,
+            "deadline": t.deadline.isoformat() if t.deadline else None,
+            "project_name": t.project_name,
+            "project_id": str(t.project_id),
+        }
+
+    def _feedback_to_dict(fb: TaskFeedbackModel) -> dict:
+        return {
+            "id": str(fb.id),
+            "task_id": str(fb.task_id),
+            "message": fb.message,
+            "is_revision_request": fb.is_revision_request,
+            "created_at": fb.created_at.isoformat(),
+        }
+
+    return {
+        "stats": {
+            "total": len(tasks),
+            "active": len(active),
+            "due_today": len(due_today),
+            "overdue": len(overdue),
+            "in_revision": len(in_revision),
+            "submitted": len(submitted),
+            "completed": len(completed),
+        },
+        "priority_tasks": [_task_to_dict(t) for t in priority_tasks[:10]],
+        "recent_feedback": [_feedback_to_dict(fb) for fb in recent_feedback],
+        "upcoming_deadlines": [_task_to_dict(t) for t in upcoming[:5]],
+        "time_today_seconds": time_summary["today_seconds"],
+        "time_week_seconds": time_summary["week_seconds"],
+        "active_timer_task_id": str(time_summary["active_timer"].task_id) if time_summary["active_timer"] else None,
+    }
+
+
+@router.get("/my-feedback", response_model=List[TaskFeedbackRead])
+def get_my_feedback(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """All feedback sent to the current worker across all tasks."""
+    _require_employee_or_above(current_user)
+    return (
+        db.query(TaskFeedbackModel)
+        .filter(TaskFeedbackModel.sent_to == current_user.id)
+        .order_by(TaskFeedbackModel.created_at.desc())
+        .limit(200)
+        .all()
+    )
+
+
+@router.get("/{task_id}/activity")
+def get_task_activity(
+    task_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> List[Dict[str, Any]]:
+    """Activity timeline for a task. Combines activity_logs + submission events + feedback events."""
+    task = task_service.get_task(db, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if current_user.role == UserRole.employee and not _employee_has_project_access(db, current_user.id, task.project_id):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from app.models.activity import ActivityLog
+
+    events: List[Dict[str, Any]] = []
+
+    # Activity logs for this task entity
+    logs = (
+        db.query(ActivityLog)
+        .filter(ActivityLog.entity_type == "task", ActivityLog.entity_id == task_id)
+        .order_by(ActivityLog.created_at.desc())
+        .limit(50)
+        .all()
+    )
+    for log in logs:
+        events.append({
+            "id": str(log.id),
+            "type": "activity",
+            "action": log.action,
+            "details": log.details,
+            "created_at": log.created_at.isoformat(),
+        })
+
+    # Submission events
+    submissions = (
+        db.query(TaskSubmissionModel)
+        .filter(TaskSubmissionModel.task_id == task_id)
+        .order_by(TaskSubmissionModel.created_at.desc())
+        .all()
+    )
+    for sub in submissions:
+        events.append({
+            "id": str(sub.id),
+            "type": "submission",
+            "action": f"Work submitted (attempt #{sub.attempt_number})",
+            "details": {
+                "status": sub.submission_status,
+                "ai_score": sub.ai_score,
+                "attempt_number": sub.attempt_number,
+            },
+            "created_at": sub.created_at.isoformat(),
+        })
+
+    # Feedback events
+    feedbacks = (
+        db.query(TaskFeedbackModel)
+        .filter(TaskFeedbackModel.task_id == task_id)
+        .order_by(TaskFeedbackModel.created_at.desc())
+        .all()
+    )
+    for fb in feedbacks:
+        events.append({
+            "id": str(fb.id),
+            "type": "feedback",
+            "action": "Revision requested" if fb.is_revision_request else "Feedback received",
+            "details": {"message": fb.message[:200]},
+            "created_at": fb.created_at.isoformat(),
+        })
+
+    # Task creation event
+    events.append({
+        "id": str(task.id) + "_created",
+        "type": "created",
+        "action": "Task assigned",
+        "details": {"title": task.title},
+        "created_at": task.created_at.isoformat(),
+    })
+
+    events.sort(key=lambda e: e["created_at"], reverse=True)
+    return events
 
 
 @router.get("/{task_id}", response_model=TaskRead)
@@ -112,7 +312,6 @@ def update_task(
         _require_manager_or_admin(current_user)
         updated_task = task_service.update_task(db, task, task_in)
 
-    # Process payment transitions for task-level updates
     if task_in.payment_status is not None and task_in.payment_status != old_payment_status:
         updated_task.last_payment_update_at = datetime.now(timezone.utc)
         db.commit()
@@ -124,8 +323,6 @@ def update_task(
 
     return updated_task
 
-
-# ── SUBMISSIONS ───────────────────────────────────────────────────────────────
 
 @router.post("/{task_id}/submit", response_model=TaskSubmissionRead)
 def submit_work(
@@ -171,8 +368,6 @@ def get_submissions(
     return submissions
 
 
-# ── WORK SUBMISSION WEBHOOK RESULT ────────────────────────────────────────────
-
 @router.post("/submission-webhook-result", response_model=TaskSubmissionRead)
 def receive_submission_webhook_result(
     result: SubmissionWebhookResult,
@@ -207,7 +402,6 @@ def receive_submission_webhook_result(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    # Store raw webhook response
     submission.webhook_response = _json.dumps({
         "status": result.status,
         "score": result.score,
@@ -276,8 +470,6 @@ def receive_submission_webhook_result(
     return submission
 
 
-# ── AI REVIEW CALLBACK ────────────────────────────────────────────────────────
-
 @router.post("/ai-review", response_model=TaskSubmissionRead)
 def receive_ai_review(
     result: AIReviewResult,
@@ -285,9 +477,6 @@ def receive_ai_review(
     current_user: Optional[User] = Depends(get_current_user_optional),
     x_webhook_secret: Optional[str] = Header(None)
 ):
-    """Receives AI review result and applies it (manager or automated call)"""
-    
-    # 1. Validation: Either a manager/admin user or a valid webhook secret
     is_authorized = False
     actor_id = None
     
@@ -300,7 +489,6 @@ def receive_ai_review(
         if x_webhook_secret == settings.N8N_WEBHOOK_SECRET:
             is_authorized = True
             # For automated calls, we attribute it to the original task creator (the manager)
-            # or a specific system user if we had one.
             task = db.query(Task).filter(Task.id == result.task_id).first()
             actor_id = task.created_by if task else None
 
@@ -322,8 +510,6 @@ def receive_ai_review(
     return sub
 
 
-# ── FEEDBACK / REVISION REQUESTS ─────────────────────────────────────────────
-
 @router.post("/{task_id}/feedback", response_model=TaskFeedbackRead)
 def send_feedback(
     task_id: UUID,
@@ -336,8 +522,6 @@ def send_feedback(
     return task_service.send_feedback(db, feedback_in, current_user.id)
 
 
-# ── LATE TASKS ────────────────────────────────────────────────────────────────
-
 @router.get("/alerts/late", response_model=List[TaskRead])
 def get_late_tasks(
     db: Session = Depends(get_db),
@@ -347,15 +531,12 @@ def get_late_tasks(
     return task_service.get_late_tasks(db)
 
 
-# ── FEEDBACKS ─────────────────────────────────────────────────────────────────
-
 @router.get("/{task_id}/feedbacks", response_model=List[TaskFeedbackRead])
 def get_task_feedbacks(
     task_id: UUID,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get all feedback messages for a task (employee sees their own task feedbacks)"""
     from app.models.task import TaskFeedback as TaskFeedbackModel
     task = task_service.get_task(db, task_id)
     if not task:

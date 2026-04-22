@@ -24,8 +24,11 @@ from app.core.config import settings
 from pydantic import BaseModel
 from sqlalchemy import func
 from datetime import timedelta
+import logging
 import requests
 from app.services.delivery_service import delivery_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -49,8 +52,6 @@ class ManagerOverview(BaseModel):
     late_tasks: List[TaskRead]
 
 
-# ── HELPER ────────────────────────────────────────────────────────────────────
-
 def _require_manager_or_admin(current_user: User):
     if current_user.role not in [UserRole.manager, UserRole.admin]:
         raise HTTPException(status_code=403, detail="Manager or Admin access required")
@@ -71,7 +72,6 @@ def get_manager_overview(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manager/Admin: fetch briefs + active projects + late tasks in one call."""
     _require_manager_or_admin(current_user)
 
     briefs = db.query(Project).filter(
@@ -104,14 +104,12 @@ def get_manager_dashboard(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Full manager dashboard — KPIs, workers, revenue, workload, alerts in one call."""
     _require_manager_or_admin(current_user)
 
     try:
         now = datetime.now(timezone.utc)
         three_days = now + timedelta(days=3)
 
-        # ── Worker Performance (Aggregated queries) ──────────────────────────────
         total_by_emp = dict(
             db.query(Task.assigned_to, func.count(Task.id))
             .filter(Task.assigned_to.isnot(None))
@@ -163,7 +161,6 @@ def get_manager_dashboard(
             ))
         workers.sort(key=lambda w: w.performance_score, reverse=True)
 
-        # ── Revenue ───────────────────────────────────────────────────────────────
         # OPTIMIZATION: Limit paid projects to recent ones only
         paid_projects = db.query(Project)\
             .filter(Project.payment_status == PaymentStatus.fully_paid)\
@@ -174,7 +171,6 @@ def get_manager_dashboard(
         pending_count = db.query(func.count(Project.id)).filter(Project.payment_status == PaymentStatus.unpaid).scalar() or 0
         overdue_count = db.query(func.count(Project.id)).filter(Project.payment_status == PaymentStatus.overdue).scalar() or 0
 
-        # ── Task Workload ─────────────────────────────────────────────────────────
         # OPTIMIZATION: Fetch counts and specific lists instead of ALL active tasks
         total_active_count = db.query(func.count(Task.id)).filter(
             Task.status.notin_([TaskStatus.completed, TaskStatus.approved])
@@ -204,7 +200,6 @@ def get_manager_dashboard(
                 project_name=t.project_name, assigned_to=t.assigned_to,
             )
 
-        # ── Project Snapshot (Optimized Counts) ──────────────────────────────────
         total_projects = db.query(func.count(Project.id)).scalar() or 0
         status_counts = dict(db.query(Project.status, func.count(Project.id)).group_by(Project.status).all())
         
@@ -213,20 +208,17 @@ def get_manager_dashboard(
         proj_delivered_count = status_counts.get(ProjectStatus.delivered, 0)
         proj_hold_count = status_counts.get(ProjectStatus.on_hold, 0)
         
-        # Delayed count needs specific filtering
         proj_delayed_count = db.query(func.count(Project.id)).filter(
             Project.deadline.isnot(None), 
             Project.deadline < now,
             Project.status.notin_([ProjectStatus.completed, ProjectStatus.delivered, ProjectStatus.archived])
         ).scalar() or 0
 
-        # Recent active projects for display
         active_projects_list = db.query(Project)\
             .filter(Project.status == ProjectStatus.active)\
             .order_by(Project.updated_at.desc())\
             .limit(10).all()
 
-        # ── Alerts ────────────────────────────────────────────────────────────────
         alerts = []
         for t in urgent_tasks:
             alerts.append(DashboardAlertItem(
@@ -272,13 +264,11 @@ def get_manager_dashboard(
             
         alerts.sort(key=lambda a: {'critical': 0, 'warning': 1, 'info': 2}[a.priority])
 
-        # ── Global KPIs ───────────────────────────────────────────────────────────
         total_tasks_global = db.query(func.count(Task.id)).scalar() or 0
         completed_total = db.query(func.count(Task.id)).filter(Task.status.in_([TaskStatus.completed, TaskStatus.approved])).scalar() or 0
         completion_rate = round(completed_total / total_tasks_global * 100, 1) if total_tasks_global > 0 else 0.0
         avg_ai_global   = db.query(func.avg(TaskSubmission.ai_score)).filter(TaskSubmission.ai_score.isnot(None)).scalar()
 
-        # Briefs for display
         briefs_list = db.query(Project).filter(
             Project.brief_status.in_([BriefStatus.submitted, BriefStatus.clarification_requested, BriefStatus.validated])
         ).limit(20).all()
@@ -315,11 +305,7 @@ def get_manager_dashboard(
             active_projects=active_projects_list,
         )
     except Exception as e:
-        import traceback
-        print("\n" + "="*80)
-        print(f"CRITICAL ERROR IN MANAGER DASHBOARD: {e}")
-        traceback.print_exc()
-        print("="*80 + "\n")
+        logger.exception("Manager dashboard error: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -328,7 +314,6 @@ def get_received_briefs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manager: view all submitted briefs"""
     _require_manager_or_admin(current_user)
     return db.query(Project).filter(
         Project.brief_status.in_([
@@ -344,7 +329,6 @@ def get_my_brief_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Client: view all their briefs and associated project status"""
     return db.query(Project).filter(
         Project.client_id == current_user.id
     ).order_by(Project.created_at.desc()).all()
@@ -367,7 +351,6 @@ def read_project(
     if project.client_id == current_user.id:
         return project
     if current_user.role == UserRole.employee:
-        # Allow employee if they are the project-level assignee or have a task on this project
         has_task = db.query(Task).filter(
             Task.project_id == project.id,
             Task.assigned_to == current_user.id,
@@ -420,7 +403,6 @@ def brief_action(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manager: validate, request clarification, or reject a brief"""
     _require_manager_or_admin(current_user)
     project = project_service.get_project(db, project_id)
     if not project:
@@ -480,7 +462,6 @@ def convert_brief_to_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manager: convert a validated brief into a project and assign it"""
     _require_manager_or_admin(current_user)
     project = project_service.get_project(db, project_id)
     if not project:
@@ -522,7 +503,6 @@ def generate_ai_resume(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manager: generate an AI resume for the brief content"""
     _require_manager_or_admin(current_user)
     project = project_service.get_project(db, project_id)
     if not project:
@@ -541,7 +521,7 @@ def generate_ai_resume(
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
-        print(f"Error calling AI Resume Webhook: {e}")
+        logger.error("AI Resume Webhook failed: %s", e)
         raise HTTPException(status_code=502, detail="Failed to reach the AI service.")
 
 
@@ -551,7 +531,6 @@ def mark_project_paid(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manager manually marks a project as paid"""
     _require_manager_or_admin(current_user)
     project = project_service.get_project(db, project_id)
     if not project:
@@ -585,7 +564,6 @@ def deliver_partial_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Manager manually selects tasks to deliver with watermark for partially paid project"""
     _require_manager_or_admin(current_user)
     project = project_service.get_project(db, project_id)
     if not project:

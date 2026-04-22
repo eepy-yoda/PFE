@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import asyncio
-from app.api.routes import auth, users, projects, brief, tasks, notifications, management, submissions, image_callbacks
+from app.api.routes import auth, users, projects, brief, tasks, notifications, management, submissions, image_callbacks, time_tracking
 from app.core.config import settings
 from app.db.session import engine, Base, SessionLocal
-from app.models import user, project, task, notification, rbac, activity, workflow_image_callback # Ensure models are imported for Base.metadata
+from app.models import user, project, task, notification, rbac, activity, workflow_image_callback, time_tracking as time_tracking_model  # Ensure models are imported for Base.metadata
 from app.models.task import Task, TaskStatus
 from app.models.notification import NotificationType
 from app.services.notification_service import notification_service
@@ -69,6 +69,26 @@ def _run_startup_db_tasks():
          False),
         ("workflow_image_callbacks.callback_token index",
          "CREATE UNIQUE INDEX IF NOT EXISTS ix_workflow_image_callbacks_token ON workflow_image_callbacks (callback_token)",
+         False),
+        ("time_logs table",
+         """CREATE TABLE IF NOT EXISTS time_logs (
+             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+             task_id UUID NOT NULL REFERENCES tasks(id),
+             user_id UUID NOT NULL REFERENCES users(id),
+             start_time TIMESTAMPTZ NOT NULL DEFAULT now(),
+             end_time TIMESTAMPTZ,
+             duration_seconds FLOAT,
+             description TEXT,
+             is_manual BOOLEAN DEFAULT FALSE,
+             created_at TIMESTAMPTZ DEFAULT now(),
+             updated_at TIMESTAMPTZ DEFAULT now()
+         )""",
+         False),
+        ("time_logs.task_id index",
+         "CREATE INDEX IF NOT EXISTS ix_time_logs_task_id ON time_logs (task_id)",
+         False),
+        ("time_logs.user_id index",
+         "CREATE INDEX IF NOT EXISTS ix_time_logs_user_id ON time_logs (user_id)",
          False),
     ]
     for label, sql, pg_only in migrations:
@@ -155,6 +175,7 @@ app.include_router(submissions.router, prefix=f"{settings.API_V1_STR}", tags=["s
 app.include_router(notifications.router, prefix=f"{settings.API_V1_STR}/notifications", tags=["notifications"])
 app.include_router(management.router, prefix=f"{settings.API_V1_STR}/management", tags=["management"])
 app.include_router(image_callbacks.router, prefix=f"{settings.API_V1_STR}", tags=["webhooks"])
+app.include_router(time_tracking.router, prefix=f"{settings.API_V1_STR}/time-tracking", tags=["time-tracking"])
 
 @app.get("/")
 def root():

@@ -833,7 +833,6 @@ const ProjectDetail: React.FC = () => {
                 </div>
             )}
 
-            {/* ── Task Detail / Edit Modal ── */}
             {taskDetail && (
                 <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-gray-950/60 backdrop-blur-sm">
                     <div className="bg-white dark:bg-gray-900 rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl w-full sm:max-w-2xl max-h-[90vh] overflow-hidden border border-gray-100 dark:border-gray-800 flex flex-col">
@@ -1213,7 +1212,6 @@ const ProjectDetail: React.FC = () => {
 
                                                 const finalPaths: string[] = (isFinal && sub.file_paths) ? JSON.parse(sub.file_paths) : [];
                                                 
-                                                // ── WATERMARK PATHS LOGIC ──
                                                 let watermarkPaths: string[] = [];
                                                 if (!isFinal) {
                                                     // Primary: watermarked_file_paths holds the pre-built public URL

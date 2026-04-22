@@ -270,6 +270,76 @@ export interface Notification {
     read_at?: string;
 }
 
+// ── Time Tracking ────────────────────────────────────────────────────────────
+
+export interface TimeLog {
+    id: string;
+    task_id: string;
+    user_id: string;
+    start_time: string;
+    end_time?: string;
+    duration_seconds?: number;
+    description?: string;
+    is_manual: boolean;
+    created_at: string;
+    task_title?: string;
+    project_name?: string;
+}
+
+export interface TimeSummary {
+    today_seconds: number;
+    week_seconds: number;
+    active_timer?: TimeLog;
+}
+
+// ── Worker Dashboard ─────────────────────────────────────────────────────────
+
+export interface WorkerTaskSummaryItem {
+    id: string;
+    title: string;
+    status: TaskStatus;
+    priority: TaskPriority;
+    deadline?: string;
+    project_name?: string;
+    project_id: string;
+}
+
+export interface WorkerFeedbackSummaryItem {
+    id: string;
+    task_id: string;
+    message: string;
+    is_revision_request: boolean;
+    created_at: string;
+}
+
+export interface WorkerDashboardSummary {
+    stats: {
+        total: number;
+        active: number;
+        due_today: number;
+        overdue: number;
+        in_revision: number;
+        submitted: number;
+        completed: number;
+    };
+    priority_tasks: WorkerTaskSummaryItem[];
+    recent_feedback: WorkerFeedbackSummaryItem[];
+    upcoming_deadlines: WorkerTaskSummaryItem[];
+    time_today_seconds: number;
+    time_week_seconds: number;
+    active_timer_task_id?: string;
+}
+
+// ── Activity Event ────────────────────────────────────────────────────────────
+
+export interface ActivityEvent {
+    id: string;
+    type: 'activity' | 'submission' | 'feedback' | 'created';
+    action: string;
+    details?: Record<string, any>;
+    created_at: string;
+}
+
 // ── Dashboard ────────────────────────────────────────────────────────────────
 
 /** What the DashboardViewModel exposes to the view */

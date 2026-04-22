@@ -14,7 +14,6 @@ export interface AdminUserUpdate {
 }
 
 export const usersService = {
-    // ── Admin: user management ────────────────────────────────────────────────
     async getAll(): Promise<CurrentUser[]> {
         const response = await api.get<CurrentUser[]>('/users/');
         return response.data;
@@ -39,7 +38,6 @@ export const usersService = {
         return response.data;
     },
 
-    // ── Current user ──────────────────────────────────────────────────────────
     async getMe(): Promise<CurrentUser> {
         const response = await api.get<CurrentUser>('/users/me');
         return response.data;
@@ -53,7 +51,6 @@ export const usersService = {
         agency_name?: string;
         avatar_url?: string;
     }): Promise<CurrentUser> {
-        // Backend uses PUT /users/me
         const response = await api.put<CurrentUser>('/users/me', profileData);
         return response.data;
     },

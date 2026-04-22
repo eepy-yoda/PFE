@@ -19,7 +19,6 @@ from supabase import create_client, Client
 
 from app.core.config import settings
 
-# ── Bucket used for all task-related files ────────────────────────────────────
 TASK_SUBMISSIONS_BUCKET = "task-submissions"
 
 
@@ -62,22 +61,16 @@ def upload_watermark_preview(
     )
 
     # supabase-py v2 raises an exception on failure; check for StorageException
-    # The path returned in response is the stored path.
     public_url = supabase.storage.from_(TASK_SUBMISSIONS_BUCKET).get_public_url(storage_path)
     return public_url
 
 
 def _extension_from_content_type(content_type: str, filename: str) -> str:
-    """Return file extension including dot, e.g. '.jpg'."""
-    # Prefer extension already in filename
     if "." in filename:
         return "." + filename.rsplit(".", 1)[-1].lower()
-    # Derive from MIME type
     ext = mimetypes.guess_extension(content_type.split(";")[0].strip())
     return ext or ""
 
-
-# ── Deliverables bucket ───────────────────────────────────────────────────────
 
 DELIVERABLES_BUCKET = "deliverables"
 

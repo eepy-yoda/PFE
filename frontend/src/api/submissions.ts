@@ -17,8 +17,6 @@ export interface SubmissionCreatePayload {
 
 export interface SubmissionCreateResponse extends TaskSubmission {}
 
-// ── Core submission API ───────────────────────────────────────────────────────
-
 export const submissionsApi = {
   /**
    * Submit work for a task.

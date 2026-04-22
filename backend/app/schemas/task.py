@@ -71,14 +71,18 @@ class TaskSubmissionRead(BaseModel):
     content: Optional[str] = None
     links: Optional[str] = None
     file_paths: Optional[str] = None
+    watermarked_file_paths: Optional[str] = None
     submission_status: SubmissionStatus = SubmissionStatus.pending
     brief_snapshot: Optional[str] = None
     webhook_response: Optional[str] = None
+    ai_analysis_result: Optional[str] = None
     ai_score: Optional[float] = None
     ai_feedback: Optional[str] = None
+    attempt_number: int = 1
     is_approved: bool
     reviewed_by: Optional[UUID] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

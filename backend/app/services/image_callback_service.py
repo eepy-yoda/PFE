@@ -50,8 +50,6 @@ def _token_hint(token: str) -> str:
 
 class ImageCallbackService:
 
-    # ── Phase 1: create pending record ───────────────────────────────────────
-
     def create_pending_callback(
         self,
         db: Session,
@@ -146,7 +144,6 @@ class ImageCallbackService:
         """
         hint = _token_hint(token)
 
-        # ── 0. Early path validation ──────────────────────────────────────────
         if not image_path or not isinstance(image_path, str):
             logger.error(
                 "[ImageCallback] image_path is empty or not a string  hint=%s  raw=%r",
@@ -178,7 +175,6 @@ class ImageCallbackService:
                 detail="image_path must contain at least one '/' (expected: bucket/object-key).",
             )
 
-        # ── 1. Token lookup ───────────────────────────────────────────────────
         record = (
             db.query(WorkflowImageCallback)
             .filter(WorkflowImageCallback.callback_token == token)
@@ -196,7 +192,6 @@ class ImageCallbackService:
             record.submission_id, record.task_id, record.project_id,
         )
 
-        # ── 2. Idempotency: already completed ────────────────────────────────
         if record.status == "completed":
             logger.info(
                 "[ImageCallback] Already completed — returning idempotent success  "
@@ -216,7 +211,6 @@ class ImageCallbackService:
                 detail=f"Callback is not in a processable state (current: {record.status}).",
             )
 
-        # ── 3. Expiry check ───────────────────────────────────────────────────
         now = datetime.now(timezone.utc)
         if record.expires_at and record.expires_at < now:
             record.status = "expired"
@@ -224,7 +218,6 @@ class ImageCallbackService:
             logger.warning("[ImageCallback] Token expired  hint=%s", hint)
             raise HTTPException(status_code=410, detail="Callback token has expired.")
 
-        # ── 4. Verify business records + cross-validate relationships ─────────
         project = db.query(Project).filter(Project.id == record.project_id).first()
         if not project:
             logger.error(
@@ -242,7 +235,6 @@ class ImageCallbackService:
                     hint, record.task_id,
                 )
                 raise HTTPException(status_code=404, detail="Associated task no longer exists.")
-            # Cross-validate: task must belong to the expected project
             if task.project_id != record.project_id:
                 logger.error(
                     "[ImageCallback] CROSS-VALIDATION FAILED task.project_id=%s != "
@@ -267,7 +259,6 @@ class ImageCallbackService:
                     record.submission_id, hint,
                 )
             else:
-                # Cross-validate: submission must belong to the expected task
                 if record.task_id and submission.task_id != record.task_id:
                     logger.error(
                         "[ImageCallback] CROSS-VALIDATION FAILED submission.task_id=%s != "
@@ -311,7 +302,6 @@ class ImageCallbackService:
                        "Callback marked failed.",
             )
 
-        # ── 5. Parse storage path ─────────────────────────────────────────────
         # image_path: "task-submissions/preview/1775060331076-file.png"
         #   → bucket="task-submissions", storage_path="preview/1775060331076-file.png"
         parts = image_path.split("/", 1)
@@ -328,7 +318,6 @@ class ImageCallbackService:
             hint, image_path, bucket, storage_path, public_url,
         )
 
-        # ── 6. Stage writes (record.status NOT set yet) ───────────────────────
         record.storage_bucket = bucket
         record.storage_path = storage_path
         record.processed_at = now
@@ -349,14 +338,12 @@ class ImageCallbackService:
                     hint, submission.id,
                 )
         else:
-            # Non-watermarked_preview with no submission: log and continue
             logger.warning(
                 "[ImageCallback] submission is None — skipping task_submissions write  "
                 "hint=%s  file_type=%s",
                 hint, record.file_type,
             )
 
-        # ── 7. Atomic commit (record.status = "completed" only on success) ────
         try:
             record.status = "completed"  # set INSIDE try — rolled back if commit fails
             db.commit()
@@ -389,7 +376,6 @@ class ImageCallbackService:
                 )
             raise HTTPException(status_code=500, detail=f"Database commit failed: {exc}")
 
-        # ── 8. Post-write verification ────────────────────────────────────────
         if submission is not None and record.file_type == "watermarked_preview":
             actual = getattr(submission, "watermark_file_path", None)
             if actual != image_path:
@@ -406,7 +392,6 @@ class ImageCallbackService:
                     hint, submission.id, actual,
                 )
 
-        # ── 9. Update delivery state ──────────────────────────────────────────
         if task:
             try:
                 self._update_delivery_state(db, record, task, project)
@@ -428,20 +413,8 @@ class ImageCallbackService:
         image_file,
         content_type: str,
     ) -> WorkflowImageCallback:
-        """
-        Full receive-validate-upload-persist-notify pipeline.
-
-        Steps:
-          1. Look up and validate the token (existence, status, expiry)
-          2. Validate the binary payload
-          3. Assert linked business records still exist
-          4. Upload image to Supabase Storage (deliverables bucket)
-          5. Persist storage path in the callback record + submission
-          6. Update task delivery state and notify the client
-        """
         hint = _token_hint(token)
 
-        # ── 1. Token validation ───────────────────────────────────────────────
         record = (
             db.query(WorkflowImageCallback)
             .filter(WorkflowImageCallback.callback_token == token)
@@ -475,7 +448,6 @@ class ImageCallbackService:
             logger.warning("[ImageCallback] Token expired  hint=%s", hint)
             raise HTTPException(status_code=410, detail="Callback token has expired")
 
-        # ── 2. Payload validation ─────────────────────────────────────────────
         # Probe file size without reading the entire stream into memory.
         try:
             image_file.seek(0, 2)
@@ -494,7 +466,6 @@ class ImageCallbackService:
                 detail=f"Unsupported content type '{content_type}'; expected image/*",
             )
 
-        # ── 3. Verify business records still exist ────────────────────────────
         project = db.query(Project).filter(Project.id == record.project_id).first()
         if not project:
             raise HTTPException(status_code=404, detail="Associated project no longer exists")
@@ -517,7 +488,6 @@ class ImageCallbackService:
                     status_code=404, detail="Associated submission no longer exists"
                 )
 
-        # ── 4. Upload to Supabase Storage ─────────────────────────────────────
         task_id_str       = str(record.task_id)       if record.task_id       else "no-task"
         submission_id_str = str(record.submission_id) if record.submission_id else "no-submission"
 
@@ -540,7 +510,6 @@ class ImageCallbackService:
             logger.error("[ImageCallback] Upload FAILED  hint=%s  error=%s", hint, exc)
             raise HTTPException(status_code=502, detail="Storage upload failed")
 
-        # ── 5. Persist storage path ───────────────────────────────────────────
         record.status         = "completed"
         record.storage_bucket = "deliverables"
         record.storage_path   = storage_path
@@ -593,20 +562,16 @@ class ImageCallbackService:
                 status_code=500, detail="Failed to update database after upload"
             )
 
-        # ── 6. Update delivery state ──────────────────────────────────────────
         if task is not None:
             try:
                 self._update_delivery_state(db, record, task, project)
             except Exception as exc:
-                # Non-fatal: storage and DB are consistent; state update failed.
                 logger.warning(
                     "[ImageCallback] Delivery state update failed  hint=%s  error=%s",
                     hint, exc,
                 )
 
         return record
-
-    # ── Internal helpers ──────────────────────────────────────────────────────
 
     def _update_delivery_state(
         self,

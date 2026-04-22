@@ -2,8 +2,6 @@ import { api } from './auth';
 import { supabase } from '../lib/supabaseClient';
 import type { Project, Task, TaskSubmission, TaskFeedback } from '../types';
 
-// ── Manager Dashboard Types ───────────────────────────────────────────────────
-
 export interface WorkerStat {
     user_id: string;
     full_name: string;
@@ -65,15 +63,12 @@ export interface ManagerDashboardData {
     active_projects: Project[];
 }
 
-// ── Projects service (MODEL layer) ────────────────────────────────────────────
-
 interface BriefActionParams {
     action: 'validate' | 'clarify' | 'reject';
     notes?: string;
 }
 
 export const projectsService = {
-    // ── Projects ──
     async getAll(): Promise<Project[]> {
         const response = await api.get<Project[]>('/projects/');
         return response.data;
@@ -94,7 +89,6 @@ export const projectsService = {
         return response.data;
     },
 
-    // ── Brief Lifecycle ──
     async getReceivedBriefs(): Promise<Project[]> {
         const response = await api.get<Project[]>('/projects/briefs/received');
         return response.data;
@@ -130,7 +124,6 @@ export const projectsService = {
         return response.data;
     },
 
-    // ── Tasks ──
     async getTasksByProject(projectId: string): Promise<Task[]> {
         const response = await api.get<Task[]>(`/tasks/project/${projectId}`);
         return response.data;

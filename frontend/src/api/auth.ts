@@ -1,8 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
 import type { CurrentUser, UserRole, RegisterPayload } from '../types';
 
-// ── Axios instance ────────────────────────────────────────────────────────────
-
 export const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL as string,
     headers: {
@@ -10,7 +8,6 @@ export const api = axios.create({
     },
 });
 
-// Attach Supabase access token to every outgoing request
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -19,7 +16,6 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     return config;
 });
 
-// Handle 401 Unauthorized globally
 api.interceptors.response.use(
     (response) => response,
     (error) => {
@@ -36,8 +32,6 @@ api.interceptors.response.use(
     }
 );
 
-// ── Response shapes ───────────────────────────────────────────────────────────
-
 interface LoginResponse {
     access_token: string;
     refresh_token: string;
@@ -45,8 +39,6 @@ interface LoginResponse {
     role: UserRole;
     user: CurrentUser;
 }
-
-// ── Auth service ──────────────────────────────────────────────────────────────
 
 export const authService = {
     async login(email: string, password: string): Promise<LoginResponse> {

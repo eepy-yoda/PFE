@@ -19,6 +19,11 @@ import { ThemeProvider } from "./context/ThemeContext";
 import GuidedBrief from "./views/pages/GuidedBrief";
 import ResetPassword from "./views/pages/ResetPassword";
 import ForgotPassword from "./views/pages/ForgotPassword";
+import MyTasksPage from "./views/pages/worker/MyTasksPage";
+import TaskWorkspace from "./views/pages/worker/TaskWorkspace";
+import FeedbackCenter from "./views/pages/worker/FeedbackCenter";
+import TimeTrackingPage from "./views/pages/worker/TimeTrackingPage";
+import NotificationCenter from "./views/pages/worker/NotificationCenter";
 
 const App: React.FC = () => {
     return (
@@ -29,7 +34,6 @@ const App: React.FC = () => {
                         <Route path="/" element={<Home />} />
                         <Route path="/how-it-works" element={<HowItWorks />} />
                         
-                        {/* Protected Routes inside Layout */}
                         <Route
                             path="/client-home"
                             element={<ProtectedRoute><ClientHome /></ProtectedRoute>}
@@ -49,6 +53,26 @@ const App: React.FC = () => {
                         <Route
                             path="/worker-dashboard"
                             element={<ProtectedRoute><WorkerDashboard /></ProtectedRoute>}
+                        />
+                        <Route
+                            path="/worker/tasks"
+                            element={<ProtectedRoute><MyTasksPage /></ProtectedRoute>}
+                        />
+                        <Route
+                            path="/worker/tasks/:taskId"
+                            element={<ProtectedRoute><TaskWorkspace /></ProtectedRoute>}
+                        />
+                        <Route
+                            path="/worker/feedback"
+                            element={<ProtectedRoute><FeedbackCenter /></ProtectedRoute>}
+                        />
+                        <Route
+                            path="/worker/time"
+                            element={<ProtectedRoute><TimeTrackingPage /></ProtectedRoute>}
+                        />
+                        <Route
+                            path="/worker/notifications"
+                            element={<ProtectedRoute><NotificationCenter /></ProtectedRoute>}
                         />
                         <Route
                             path="/brief-review/:id"
@@ -76,7 +100,6 @@ const App: React.FC = () => {
                         />
                     </Route>
 
-                    {/* Auth Routes (No Navbar/Footer) */}
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/reset-password" element={<ResetPassword />} />

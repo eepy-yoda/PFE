@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import requests
@@ -25,11 +27,11 @@ from app.services.email_service import email_service
 
 router = APIRouter()
 
+logger = logging.getLogger(__name__)
+
 # n8n signals brief completion with this status code
 N8N_COMPLETE_CODE = 333
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _parse_n8n_response(raw_text: str) -> dict:
     """Parse n8n response — handles plain JSON, NDJSON, and markdown-wrapped JSON."""
@@ -79,7 +81,7 @@ def _call_n8n(payload: dict, headers: dict) -> dict:
         )
         resp.raise_for_status()
         raw = resp.text.strip()
-        print(f"[Brief] N8N raw response: {raw[:300]}")
+        logger.debug("[Brief] N8N raw response: %s", raw[:300])
         data = _parse_n8n_response(raw)
         if not data:
             raise HTTPException(
@@ -89,14 +91,14 @@ def _call_n8n(payload: dict, headers: dict) -> dict:
         # n8n signals a workflow error with {"type": "error", "content": "..."}
         if data.get("type") == "error":
             err = data.get("content", "Unknown workflow error")
-            print(f"[Brief] N8N workflow error: {err}")
+            logger.warning("[Brief] N8N workflow error: %s", err)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Workflow engine error: {err}"
             )
         return data
     except requests.exceptions.RequestException as e:
-        print(f"[Brief] N8N call failed: {e}")
+        logger.error("[Brief] N8N call failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Communication with automation engine failed. Please try again later."
@@ -110,8 +112,6 @@ def _is_complete(n8n_data: dict) -> bool:
         or str(n8n_data.get("code", "")) == str(N8N_COMPLETE_CODE)
     )
 
-
-# ── POST /brief/start ─────────────────────────────────────────────────────────
 
 @router.post("/start", response_model=Dict[str, Any])
 async def start_brief(
@@ -137,10 +137,10 @@ async def start_brief(
         db.add(db_project)
         db.commit()
         db.refresh(db_project)
-        print(f"[Brief/Start] Project created: {db_project.id}")
+        logger.info("[Brief/Start] Project created: %s", db_project.id)
     except Exception as db_err:
         db.rollback()
-        print(f"[Brief/Start] DB error creating project: {db_err}")
+        logger.error("[Brief/Start] DB error creating project: %s", db_err)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Database error: could not create brief session. Please try again."
@@ -193,8 +193,6 @@ async def start_brief(
     return {"sessionId": str(db_project.id), "n8n_response": n8n_data}
 
 
-# ── POST /brief/autosave ──────────────────────────────────────────────────────
-
 @router.post("/autosave")
 async def autosave_brief_answer(
     request: BriefAutosaveRequest,
@@ -208,7 +206,6 @@ async def autosave_brief_answer(
     if db_project.client_id != current_user.id and current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Merge into existing saved_answers
     saved = json.loads(db_project.saved_answers or "{}")
     saved[request.fieldKey] = {
         "question": request.question,
@@ -224,29 +221,18 @@ async def autosave_brief_answer(
     return {"ok": True}
 
 
-# ── POST /brief/interrupt ─────────────────────────────────────────────────────
-
 @router.post("/interrupt")
 async def interrupt_brief(
     request: BriefInterruptRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Called when the client leaves before finishing.
-
-    - Fills every unanswered field with UNANSWERED_PLACEHOLDER.
-    - Saves the full mixed payload to saved_answers.
-    - Marks brief_status = interrupted.
-    - Calls the n8n webhook so the workflow can record the partial state.
-    """
     db_project = db.query(Project).filter(Project.id == request.sessionId).first()
     if not db_project:
         raise HTTPException(status_code=404, detail="Session not found")
     if db_project.client_id != current_user.id and current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Build complete saved_answers: answered fields keep their values;
-    # every other field gets the sentinel placeholder.
     saved = json.loads(db_project.saved_answers or "{}")
 
     for field in request.allFields:
@@ -280,12 +266,10 @@ async def interrupt_brief(
                 timeout=5
             )
         except Exception as e:
-            print(f"[Brief/Interrupt] N8N call failed (non-blocking): {e}")
+            logger.warning("[Brief/Interrupt] N8N call failed (non-blocking): %s", e)
 
     return {"ok": True, "status": "interrupted"}
 
-
-# ── GET /brief/status/{session_id} ───────────────────────────────────────────
 
 @router.get("/status/{session_id}", response_model=Dict[str, Any])
 async def get_brief_status(
@@ -299,7 +283,6 @@ async def get_brief_status(
     if db_project.client_id != current_user.id and current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Parse n8n schema (contains the full field list)
     n8n_schema = None
     if db_project.next_question:
         try:
@@ -307,7 +290,6 @@ async def get_brief_status(
         except Exception:
             pass
 
-    # Parse per-field autosaved answers
     saved_answers = {}
     if db_project.saved_answers:
         try:
@@ -324,8 +306,6 @@ async def get_brief_status(
     }
 
 
-# ── POST /brief/submit ────────────────────────────────────────────────────────
-
 @router.post("/submit", response_model=Dict[str, Any])
 async def submit_brief_step(
     request: BriefSubmitRequest,
@@ -338,18 +318,15 @@ async def submit_brief_step(
     if db_project.client_id != current_user.id and current_user.role != UserRole.admin:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # Strip placeholder values so final submission is clean
     clean_data = {
         k: v for k, v in request.data.items()
         if not (isinstance(v, dict) and v.get("answer") == UNANSWERED_PLACEHOLDER)
     }
 
-    # Update brief_history
     history = json.loads(db_project.brief_history or "{}")
     history.setdefault("steps", []).append(clean_data)
     db_project.brief_history = json.dumps(history)
 
-    # Update saved_answers with final real answers (overwrites any placeholders)
     existing_saved = json.loads(db_project.saved_answers or "{}")
     existing_saved.update(clean_data)
     db_project.saved_answers = json.dumps(existing_saved)
