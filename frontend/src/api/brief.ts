@@ -83,6 +83,11 @@ export const autosaveBriefAnswer = async (
     }
 };
 
+/** Delete a brief/project. Only allowed for briefing or planning status. */
+export const deleteBrief = async (sessionId: string): Promise<void> => {
+    await api.delete(`/brief/${sessionId}`);
+};
+
 /** Save partial state on session interruption (tab close / page hide).
  *  Uses api.post (not sendBeacon) because we have the token in axios headers.
  *  Call this from visibilitychange; beforeunload writes to localStorage instead. */

@@ -86,7 +86,7 @@ export interface SignupViewModel {
 // ── Projects ─────────────────────────────────────────────────────────────────
 
 export type ProjectStatus = 'briefing' | 'planning' | 'active' | 'completed' | 'on_hold' | 'delivered' | 'archived';
-export type BriefStatus = 'draft' | 'in_progress' | 'interrupted' | 'submitted' | 'clarification_requested' | 'validated' | 'rejected' | 'converted';
+export type BriefStatus = 'draft' | 'in_progress' | 'interrupted' | 'submitted' | 'clarification_requested' | 'validated' | 'rejected' | 'converted' | 'failed_start';
 export type PaymentStatus = 'unpaid' | 'partially_paid' | 'fully_paid' | 'pending' | 'paid' | 'overdue';
 export type PaymentType = 'project' | 'task';
 export type DeliveryState = 'not_delivered' | 'watermark_delivered' | 'final_delivered';

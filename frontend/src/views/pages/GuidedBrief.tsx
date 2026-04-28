@@ -16,6 +16,16 @@ import { cn } from '../../lib/utils';
 const LS_KEY = (id: string) => `brief_backup_${id}`;
 
 type Step = 'initial' | 'chat' | 'complete';
+type BriefingStatus =
+    | 'not_started'
+    | 'in_progress'
+    | 'completed_answers'     // all questions answered, not yet submitted
+    | 'submitting'            // webhook in flight
+    | 'submitted'             // delivery confirmed, workflow processing asynchronously
+    | 'clarification_required' // workflow returned new questions
+    | 'created'               // workflow explicitly confirmed brief was created
+    | 'submit_unknown'        // request timed out — delivery status unknown
+    | 'failed';               // definite failure — safe to retry
 
 interface Message {
     id: string;
@@ -53,6 +63,8 @@ const GuidedBrief: React.FC = () => {
     const [finalBrief, setFinalBrief] = useState<string | null>(null);
     const [resumeError, setResumeError] = useState<string | null>(null);
     const [localBackup, setLocalBackup] = useState<{ sessionId: string; savedAt: string } | null>(null);
+    const [briefingStatus, setBriefingStatus] = useState<BriefingStatus>('not_started');
+    const [webhookAttemptCount, setWebhookAttemptCount] = useState(0);
 
     // Refs used by event listeners to avoid stale closures
     const sessionIdRef = useRef<string | null>(null);
@@ -60,6 +72,10 @@ const GuidedBrief: React.FC = () => {
     const allFieldsRef = useRef<BriefField[]>([]);
     const stepRef = useRef<Step>('initial');
     const interruptSentRef = useRef(false);
+    const briefingStatusRef = useRef<BriefingStatus>('not_started');
+    // Binary lock — set synchronously before any await; prevents concurrent submit calls
+    // even if two events fire in the same JS tick before briefingStatusRef propagates.
+    const isSubmittingFinalRef = useRef(false);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +85,7 @@ const GuidedBrief: React.FC = () => {
     useEffect(() => { responsesRef.current = responses; }, [responses]);
     useEffect(() => { allFieldsRef.current = allFields; }, [allFields]);
     useEffect(() => { stepRef.current = step; }, [step]);
+    useEffect(() => { briefingStatusRef.current = briefingStatus; }, [briefingStatus]);
 
     // Auto-scroll chat
     useEffect(() => {
@@ -90,6 +107,9 @@ const GuidedBrief: React.FC = () => {
     const handleInterrupt = useCallback(() => {
         const sid = sessionIdRef.current;
         if (!sid || stepRef.current !== 'chat' || interruptSentRef.current) return;
+        // Never interrupt after submission is in flight or confirmed
+        const bs = briefingStatusRef.current;
+        if (bs === 'submitting' || bs === 'submitted' || bs === 'created' || bs === 'submit_unknown') return;
         interruptSentRef.current = true;
 
         const answered = responsesRef.current;
@@ -106,6 +126,9 @@ const GuidedBrief: React.FC = () => {
         const onBeforeUnload = () => {
             const sid = sessionIdRef.current;
             if (!sid || stepRef.current !== 'chat') return;
+            // Already finalised or in-flight — nothing to preserve
+            const bs = briefingStatusRef.current;
+            if (bs === 'created' || bs === 'submitted' || bs === 'submitting' || bs === 'submit_unknown') return;
             // localStorage backup — synchronous, survives tab close
             // (sendBeacon cannot send Authorization headers, so server-side
             //  interrupt is handled by the visibilitychange handler above)
@@ -113,6 +136,7 @@ const GuidedBrief: React.FC = () => {
                 sessionId: sid,
                 responses: responsesRef.current,
                 allFields: allFieldsRef.current,
+                briefingStatus: briefingStatusRef.current,
                 savedAt: new Date().toISOString(),
             };
             localStorage.setItem(LS_KEY(sid), JSON.stringify(backup));
@@ -156,9 +180,25 @@ const GuidedBrief: React.FC = () => {
             try {
                 const statusData = await getBriefStatus(resumeId);
 
-                // If already fully submitted, send back to dashboard
+                // Already fully submitted — back to dashboard
                 if (statusData.brief_content || statusData.status === 'submitted') {
                     navigate('/client-dashboard');
+                    return;
+                }
+
+                // Webhook failed on start — not resumable
+                if (statusData.status === 'failed_start') {
+                    setResumeError(
+                        statusData.error
+                            ? `Previous brief failed to start: ${statusData.error}. Please start a new brief.`
+                            : 'Previous brief failed to start. Please start a new brief.'
+                    );
+                    return;
+                }
+
+                // Project committed but webhook not yet complete — not resumable yet
+                if (statusData.status === 'draft' && (!statusData.n8n_response?.fields?.length)) {
+                    setResumeError('Previous brief session did not complete initialization. Please start a new brief.');
                     return;
                 }
 
@@ -168,7 +208,6 @@ const GuidedBrief: React.FC = () => {
                 const savedAnswers: Record<string, SavedAnswer> = statusData.saved_answers || {};
 
                 if (!schema || !schema.fields || schema.fields.length === 0) {
-                    // No schema — can't resume, start fresh from the same project
                     setResumeError('Could not restore your previous session. Please start a new brief.');
                     return;
                 }
@@ -272,8 +311,114 @@ const GuidedBrief: React.FC = () => {
         }, 800);
     };
 
+    // Terminal statuses: webhook must NOT be called again.
+    const TERMINAL_STATUSES: BriefingStatus[] = ['submitting', 'submitted', 'created', 'submit_unknown'];
+
+    // Sends the final webhook exactly once.
+    // Two independent locks prevent any duplicate:
+    //   1. isSubmittingFinalRef — set synchronously before any await (binary semaphore)
+    //   2. briefingStatusRef    — set to 'submitting' immediately after; secondary guard
+    const sendFinalWebhook = useCallback(async (
+        answersToSend: Record<string, { question: BriefField; answer: string }>
+    ) => {
+        // Lock 1: binary semaphore — catches same-tick concurrent calls
+        if (isSubmittingFinalRef.current) return;
+        // Lock 2: status guard — catches calls after first lock was released for retry
+        if (TERMINAL_STATUSES.includes(briefingStatusRef.current)) return;
+
+        const sid = sessionIdRef.current;
+        if (!sid) return;
+
+        // Set BOTH locks synchronously before any await
+        isSubmittingFinalRef.current = true;
+        briefingStatusRef.current = 'submitting';
+        setBriefingStatus('submitting');
+        setWebhookAttemptCount(prev => prev + 1);
+        setLoading(true);
+        setIsTyping(true);
+
+        try {
+            const result = await submitBriefStep(sid, answersToSend);
+
+            if (result.status === 'created' || result.mode === 'complete' || result.code === 333 || result.code === '333') {
+                // Workflow confirmed brief was created
+                briefingStatusRef.current = 'created';
+                setBriefingStatus('created');
+                setStep('complete');
+                setFinalBrief(result.brief_content || 'Your brief has been successfully created.');
+                localStorage.removeItem(LS_KEY(sid));
+                setLocalBackup(null);
+
+            } else if (result.status === 'submitted') {
+                // Delivery confirmed — workflow is processing asynchronously
+                briefingStatusRef.current = 'submitted';
+                setBriefingStatus('submitted');
+                setStep('complete');
+                setFinalBrief(null); // will show generic "submitted" message in complete screen
+                localStorage.removeItem(LS_KEY(sid));
+                setLocalBackup(null);
+
+            } else if (result.status === 'clarification') {
+                // Workflow needs more answers — continue chat with new questions
+                briefingStatusRef.current = 'clarification_required';
+                setBriefingStatus('clarification_required');
+                isSubmittingFinalRef.current = false; // unlock for next round
+                setResponses({});
+                setMessages(prev => [...prev, {
+                    id: `clarif-${Date.now()}`,
+                    role: 'bot',
+                    content: 'Thank you for your answers! I have a few follow-up questions to complete your brief.',
+                    timestamp: new Date(),
+                }]);
+                processQuestions(result.fields || []);
+
+            } else if (result.status === 'submit_unknown') {
+                // Timeout — delivery unknown, do NOT auto-retry
+                briefingStatusRef.current = 'submit_unknown';
+                setBriefingStatus('submit_unknown');
+                isSubmittingFinalRef.current = false; // allow deliberate retry
+                setMessages(prev => [...prev, {
+                    id: `warn-${Date.now()}`,
+                    role: 'bot',
+                    content: 'Submission status is uncertain — the server took too long to respond. Your answers are saved. Please check the workflow before retrying.',
+                    timestamp: new Date(),
+                }]);
+
+            } else {
+                // Unexpected shape — definite failure, safe to retry
+                throw new Error(`Unrecognised response: ${JSON.stringify(result)}`);
+            }
+
+        } catch (error) {
+            console.error('[Brief] Submit error:', error);
+            briefingStatusRef.current = 'failed';
+            setBriefingStatus('failed');
+            isSubmittingFinalRef.current = false; // allow retry
+            setMessages(prev => [...prev, {
+                id: `err-${Date.now()}`,
+                role: 'bot',
+                content: 'Sorry, I encountered an error submitting your brief. Your answers are saved — click "Retry Submission" below.',
+                timestamp: new Date(),
+            }]);
+        } finally {
+            setLoading(false);
+            setIsTyping(false);
+            // Do NOT clear isSubmittingFinalRef here for terminal success statuses
+            // (submitted / created). Only cleared explicitly above for retriable paths.
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleSendMessage = async (content: string, fieldKey?: string) => {
         if (!content.trim()) return;
+        // Block while submitting or after a terminal success — prevents duplicate chat entries
+        // and any accidental second submit triggered by lingering UI events.
+        if (
+            briefingStatusRef.current === 'submitting' ||
+            briefingStatusRef.current === 'submitted' ||
+            briefingStatusRef.current === 'created' ||
+            briefingStatusRef.current === 'submit_unknown'
+        ) return;
 
         const userMsg: Message = {
             id: Math.random().toString(36).substring(7),
@@ -298,6 +443,7 @@ const GuidedBrief: React.FC = () => {
                 sessionId,
                 responses: newResponses,
                 allFields: allFieldsRef.current,
+                briefingStatus: 'in_progress',
                 savedAt: new Date().toISOString(),
             };
             localStorage.setItem(LS_KEY(sessionId), JSON.stringify(backup));
@@ -311,34 +457,9 @@ const GuidedBrief: React.FC = () => {
             setCurrentFieldIdx(nextIdx);
             askQuestion(allFields[nextIdx]);
         } else {
-            // All questions answered — submit the full brief
-            setLoading(true);
-            setIsTyping(true);
-            try {
-                const result = await submitBriefStep(sessionId!, newResponses);
-                if (result.mode === 'complete' || result.code === 333 || result.code === '333') {
-                    setStep('complete');
-                    setFinalBrief(result.brief_content || 'The brief has been generated and sent to the analysis engine.');
-                    // Clean up localStorage backup and recovery banner
-                    if (sessionId) localStorage.removeItem(LS_KEY(sessionId));
-                    setLocalBackup(null);
-                } else if (result.mode === 'schema') {
-                    // n8n returned more questions (multi-round flow)
-                    setResponses({});
-                    processQuestions(result.fields || []);
-                }
-            } catch (error) {
-                console.error('[Brief] Submit error:', error);
-                setMessages(prev => [...prev, {
-                    id: 'err',
-                    role: 'bot',
-                    content: 'Sorry, I encountered an error submitting your brief. Your answers are saved — you can resume from your dashboard.',
-                    timestamp: new Date(),
-                }]);
-            } finally {
-                setLoading(false);
-                setIsTyping(false);
-            }
+            // All questions answered — send webhook exactly once
+            setBriefingStatus('completed_answers');
+            await sendFinalWebhook(newResponses);
         }
     };
 
@@ -355,9 +476,11 @@ const GuidedBrief: React.FC = () => {
 
             const n8n = response.n8n_response;
             if (n8n.mode === 'complete' || n8n.code === 333 || n8n.code === '333') {
+                setBriefingStatus('created');
                 setStep('complete');
                 setFinalBrief(n8n.brief_content || 'Brief completed.');
             } else if (n8n.mode === 'schema') {
+                setBriefingStatus('in_progress');
                 setStep('chat');
                 processQuestions(n8n.fields || []);
             } else {
@@ -629,8 +752,9 @@ const GuidedBrief: React.FC = () => {
                                                     {m.options.map(opt => (
                                                         <button
                                                             key={opt}
+                                                            disabled={loading || isSubmittingFinalRef.current}
                                                             onClick={() => handleSendMessage(opt, m.fieldKey)}
-                                                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs transition-colors"
+                                                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs transition-colors"
                                                         >{opt}</button>
                                                     ))}
                                                 </div>
@@ -688,6 +812,25 @@ const GuidedBrief: React.FC = () => {
                                     </button>
                                 </form>
                             </div>
+
+                            {/* Retry strip — failed = safe retry; submit_unknown = deliberate retry */}
+                            {(briefingStatus === 'failed' || briefingStatus === 'submit_unknown') && !loading && (
+                                <div className="px-4 pb-4">
+                                    <button
+                                        onClick={() => sendFinalWebhook(responses)}
+                                        className={cn(
+                                            "w-full text-sm font-medium py-2.5 rounded-xl border transition-colors",
+                                            briefingStatus === 'submit_unknown'
+                                                ? "text-amber-400 hover:text-amber-300 border-amber-500/30 hover:border-amber-500/50 bg-amber-500/5"
+                                                : "text-red-400 hover:text-red-300 border-red-500/30 hover:border-red-500/50 bg-red-500/5"
+                                        )}
+                                    >
+                                        {briefingStatus === 'submit_unknown'
+                                            ? 'Retry Submission (check workflow first)'
+                                            : 'Retry Submission'}
+                                    </button>
+                                </div>
+                            )}
                         </motion.div>
                     )}
 
@@ -699,19 +842,39 @@ const GuidedBrief: React.FC = () => {
                             animate={{ opacity: 1, scale: 1 }}
                             className="bg-[#0f0f0f]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-12 text-center shadow-2xl"
                         >
-                            <div className="w-20 h-20 bg-green-500/20 text-green-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                            <div className={cn(
+                                "w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6",
+                                briefingStatus === 'created'
+                                    ? "bg-green-500/20 text-green-500"
+                                    : "bg-blue-500/20 text-blue-400"
+                            )}>
                                 <CheckCircle2 className="w-10 h-10" />
                             </div>
-                            <h2 className="text-3xl font-bold mb-4">Brief Created!</h2>
-                            <p className="text-gray-400 mb-8 max-w-md mx-auto">
-                                Your project brief has been successfully analyzed.
-                            </p>
-                            <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-8 text-left">
-                                <h3 className="text-xs font-bold tracking-widest text-primary mb-3 uppercase">Summary</h3>
-                                <div className="text-gray-300 italic whitespace-pre-wrap">
-                                    "{finalBrief || 'No summary available.'}"
-                                </div>
-                            </div>
+
+                            {briefingStatus === 'created' ? (
+                                <>
+                                    <h2 className="text-3xl font-bold mb-4">Brief Created!</h2>
+                                    <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                                        Your project brief has been successfully created.
+                                    </p>
+                                    {finalBrief && (
+                                        <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-8 text-left">
+                                            <h3 className="text-xs font-bold tracking-widest text-primary mb-3 uppercase">Summary</h3>
+                                            <div className="text-gray-300 italic whitespace-pre-wrap">
+                                                "{finalBrief}"
+                                            </div>
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    <h2 className="text-3xl font-bold mb-4">Brief Submitted!</h2>
+                                    <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                                        Your brief has been received and is being processed. Your manager will be notified when it's ready.
+                                    </p>
+                                </>
+                            )}
+
                             <button
                                 onClick={() => navigate('/client-dashboard')}
                                 className="inline-flex items-center gap-2 bg-white text-black font-bold px-8 py-3 rounded-xl hover:bg-gray-200 transition-colors"

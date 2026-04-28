@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Briefcase, Clock, FileText, CheckCircle2,
-    Plus, Search, ChevronRight, AlertCircle, RefreshCw
+    Plus, Search, ChevronRight, AlertCircle, RefreshCw, Trash2, Loader2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { projectsService } from '../../../api/projects';
+import { deleteBrief } from '../../../api/brief';
 import type { Project } from '../../../types';
 
 // ── Status helpers ────────────────────────────────────────────────────────────
@@ -39,7 +40,10 @@ const briefStatusColor: Record<string, string> = {
     validated:                'text-green-500',
     rejected:                 'text-red-500',
     converted:                'text-purple-500',
+    failed_start:             'text-red-400',
 };
+
+const RESUMABLE_BRIEF_STATUSES = ['in_progress', 'interrupted'];
 
 const progressPct = (p: Project): number => {
     if (p.status === 'delivered' || p.status === 'completed') return 100;
@@ -72,6 +76,9 @@ const ClientDashboard: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [tab, setTab] = useState<Tab>('active');
+    const [confirmTarget, setConfirmTarget] = useState<{ id: string; name: string } | null>(null);
+    const [deleting, setDeleting] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const loadProjects = () => {
         setLoading(true);
@@ -83,17 +90,41 @@ const ClientDashboard: React.FC = () => {
 
     useEffect(() => { loadProjects(); }, []);
 
+    const openConfirm = (e: React.MouseEvent, id: string, name: string) => {
+        e.stopPropagation();
+        setDeleteError(null);
+        setConfirmTarget({ id, name });
+    };
+
+    const closeConfirm = () => {
+        if (deleting) return;
+        setConfirmTarget(null);
+        setDeleteError(null);
+    };
+
+    const confirmDelete = async () => {
+        if (!confirmTarget) return;
+        setDeleting(true);
+        setDeleteError(null);
+        try {
+            await deleteBrief(confirmTarget.id);
+            setProjects(prev => prev.filter(p => p.id !== confirmTarget.id));
+            setConfirmTarget(null);
+        } catch (err: any) {
+            setDeleteError(err?.response?.data?.detail ?? 'Failed to delete. Please try again.');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     // Segment projects
     const activeProjects  = projects.filter(p => ['briefing', 'planning', 'active', 'on_hold'].includes(p.status));
     const historyProjects = projects.filter(p => ['completed', 'delivered', 'archived'].includes(p.status));
-    // Include interrupted so a crashed session still shows the resume banner
-    const draftBriefs     = projects.filter(p =>
-        ['draft', 'in_progress', 'interrupted'].includes(p.brief_status)
-    );
-    // For the resume button: prefer the most recently interrupted/in_progress one
-    const resumeTarget    = draftBriefs.find(p => p.brief_status === 'interrupted')
-                         ?? draftBriefs.find(p => p.brief_status === 'in_progress')
-                         ?? draftBriefs[0];
+    // Only in_progress/interrupted are genuinely resumable — draft = zombie/initializing, excluded
+    const resumableBriefs = projects.filter(p => RESUMABLE_BRIEF_STATUSES.includes(p.brief_status));
+    // Prefer interrupted (has saved answers) over in_progress
+    const resumeTarget    = resumableBriefs.find(p => p.brief_status === 'interrupted')
+                         ?? resumableBriefs[0];
 
     const displayed = (tab === 'active' ? activeProjects : historyProjects)
         .filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
@@ -130,14 +161,14 @@ const ClientDashboard: React.FC = () => {
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-10">
-                    <Stat icon={Briefcase}    label="Total Projects"   value={projects.length}         color="text-blue-500"   bg="bg-blue-50 dark:bg-blue-900/20" />
-                    <Stat icon={Clock}        label="In Progress"      value={activeProjects.length}   color="text-amber-500"  bg="bg-amber-50 dark:bg-amber-900/20" />
-                    <Stat icon={FileText}     label="Draft Briefs"     value={draftBriefs.length}      color="text-purple-500" bg="bg-purple-50 dark:bg-purple-900/20" />
-                    <Stat icon={CheckCircle2} label="Delivered"        value={historyProjects.length}  color="text-green-500"  bg="bg-green-50 dark:bg-green-900/20" />
+                    <Stat icon={Briefcase}    label="Total Projects"   value={projects.length}          color="text-blue-500"   bg="bg-blue-50 dark:bg-blue-900/20" />
+                    <Stat icon={Clock}        label="In Progress"      value={activeProjects.length}    color="text-amber-500"  bg="bg-amber-50 dark:bg-amber-900/20" />
+                    <Stat icon={FileText}     label="Pending Briefs"   value={resumableBriefs.length}   color="text-purple-500" bg="bg-purple-50 dark:bg-purple-900/20" />
+                    <Stat icon={CheckCircle2} label="Delivered"        value={historyProjects.length}   color="text-green-500"  bg="bg-green-50 dark:bg-green-900/20" />
                 </div>
 
-                {/* Draft brief banner */}
-                {draftBriefs.length > 0 && (
+                {/* Resumable brief banner */}
+                {resumableBriefs.length > 0 && (
                     <motion.div
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -146,17 +177,17 @@ const ClientDashboard: React.FC = () => {
                         <div className="flex items-center gap-3">
                             <AlertCircle size={20} className="text-amber-500 shrink-0" />
                             <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
-                                You have {draftBriefs.length} incomplete brief{draftBriefs.length > 1 ? 's' : ''}.
-                                {resumeTarget?.brief_status === 'interrupted' && ' Your last session was interrupted — your answers are saved.'}
+                                {resumeTarget?.brief_status === 'interrupted'
+                                    ? `"${resumeTarget.name}" was interrupted — your answers are saved.`
+                                    : `"${resumeTarget?.name}" brief is in progress.`
+                                }
                             </p>
                         </div>
                         <button
-                            onClick={() => navigate(
-                                resumeTarget ? `/guided-brief?resume=${resumeTarget.id}` : '/guided-brief'
-                            )}
+                            onClick={() => navigate(`/guided-brief?resume=${resumeTarget!.id}`)}
                             className="text-xs font-black text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/40 px-4 py-2 rounded-xl hover:bg-amber-200 dark:hover:bg-amber-900/60 transition-colors whitespace-nowrap"
                         >
-                            {resumeTarget?.brief_status === 'interrupted' ? 'Continue Brief' : 'Resume Brief'}
+                            Continue Brief
                         </button>
                     </motion.div>
                 )}
@@ -236,7 +267,7 @@ const ClientDashboard: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center gap-5 shrink-0">
+                                        <div className="flex items-center gap-3 shrink-0">
                                             <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statusColor[project.status] || statusColor.archived}`}>
                                                 {statusLabel[project.status] || project.status}
                                             </span>
@@ -249,6 +280,23 @@ const ClientDashboard: React.FC = () => {
                                                     <div className="h-full bg-primary rounded-full transition-all duration-700" style={{ width: `${pct}%` }} />
                                                 </div>
                                             </div>
+                                            {RESUMABLE_BRIEF_STATUSES.includes(project.brief_status) && (
+                                                <button
+                                                    onClick={e => { e.stopPropagation(); navigate(`/guided-brief?resume=${project.id}`); }}
+                                                    className="text-[11px] font-bold px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800 transition-colors whitespace-nowrap"
+                                                >
+                                                    Continue Brief
+                                                </button>
+                                            )}
+                                            {(project.status === 'briefing' || project.status === 'planning') && (
+                                                <button
+                                                    onClick={e => openConfirm(e, project.id, project.name)}
+                                                    title="Delete brief"
+                                                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            )}
                                             <ChevronRight size={18} className="text-gray-300 dark:text-gray-600 group-hover:text-primary transition-colors" />
                                         </div>
                                     </motion.div>
@@ -258,6 +306,76 @@ const ClientDashboard: React.FC = () => {
                     </div>
                 </div>
             </main>
+
+            {/* ── Delete confirmation modal ── */}
+            <AnimatePresence>
+                {confirmTarget && (
+                    <>
+                        {/* Backdrop */}
+                        <motion.div
+                            key="backdrop"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={closeConfirm}
+                            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+                        />
+
+                        {/* Dialog */}
+                        <motion.div
+                            key="dialog"
+                            initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                            transition={{ duration: 0.15 }}
+                            className="fixed z-50 inset-0 flex items-center justify-center p-4 pointer-events-none"
+                        >
+                            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-gray-800 w-full max-w-sm pointer-events-auto p-6">
+                                {/* Icon */}
+                                <div className="w-12 h-12 rounded-2xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center mb-4">
+                                    <Trash2 size={22} className="text-red-500" />
+                                </div>
+
+                                <h2 className="text-lg font-extrabold text-gray-900 dark:text-white mb-1">
+                                    Delete brief?
+                                </h2>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+                                    <span className="font-semibold text-gray-700 dark:text-gray-300">"{confirmTarget.name}"</span> will be permanently deleted. This cannot be undone.
+                                </p>
+
+                                {/* Error */}
+                                {deleteError && (
+                                    <div className="mb-4 flex items-center gap-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-3 py-2.5">
+                                        <AlertCircle size={15} className="shrink-0" />
+                                        {deleteError}
+                                    </div>
+                                )}
+
+                                {/* Actions */}
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={closeConfirm}
+                                        disabled={deleting}
+                                        className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 text-sm font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-40"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={confirmDelete}
+                                        disabled={deleting}
+                                        className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {deleting
+                                            ? <><Loader2 size={15} className="animate-spin" /> Deleting…</>
+                                            : 'Delete'
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

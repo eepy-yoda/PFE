@@ -26,6 +26,7 @@ class BriefStatus(str, enum.Enum):
     validated = "validated"
     rejected = "rejected"
     converted = "converted"
+    failed_start = "failed_start"  # project committed but webhook failed; not resumable
 
 
 class PaymentType(str, enum.Enum):
