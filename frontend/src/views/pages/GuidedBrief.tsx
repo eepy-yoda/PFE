@@ -174,11 +174,14 @@ const GuidedBrief: React.FC = () => {
         const resumeId = searchParams.get('resume');
         if (!resumeId) return;
 
+        let cancelled = false;
+
         const resumeBrief = async () => {
             setLoading(true);
             setResumeError(null);
             try {
                 const statusData = await getBriefStatus(resumeId);
+                if (cancelled) return;
 
                 // Already fully submitted — back to dashboard
                 if (statusData.brief_content || statusData.status === 'submitted') {
@@ -226,7 +229,6 @@ const GuidedBrief: React.FC = () => {
                     const saved = savedAnswers[field.key];
 
                     if (saved && saved.answer && saved.answer !== UNANSWERED_PLACEHOLDER) {
-                        // Answered field — reconstruct the Q+A messages
                         restoredMessages.push({
                             id: `resume-bot-${i}`,
                             role: 'bot',
@@ -244,44 +246,44 @@ const GuidedBrief: React.FC = () => {
                         restoredResponses[field.key] = { question: field, answer: saved.answer };
                         firstUnansweredIdx = i + 1;
                     } else {
-                        // First unanswered field found — stop here
                         break;
                     }
                 }
 
-                setResponses(restoredResponses);
-                setCurrentFieldIdx(firstUnansweredIdx);
-                setMessages(restoredMessages);
-                setStep('chat');
-
-                // Add a divider message if we're resuming mid-way
+                // Build the full initial message list including the divider inline,
+                // so a single setMessages call sets the final pre-question state.
+                const initialMessages: Message[] = [...restoredMessages];
                 if (firstUnansweredIdx > 0) {
-                    setMessages(prev => [
-                        ...prev,
-                        {
-                            id: 'resume-divider',
-                            role: 'bot',
-                            content: '✅ Your previous answers have been restored. Let\'s continue from where you left off.',
-                            timestamp: new Date(),
-                            type: 'text',
-                        }
-                    ]);
+                    initialMessages.push({
+                        id: 'resume-divider',
+                        role: 'bot',
+                        content: '✅ Your previous answers have been restored. Let\'s continue from where you left off.',
+                        timestamp: new Date(),
+                        type: 'text',
+                    });
                 }
 
-                // Ask the first unanswered question
+                setResponses(restoredResponses);
+                setCurrentFieldIdx(firstUnansweredIdx);
+                setMessages(initialMessages);
+                setStep('chat');
+
+                // Ask the first unanswered question after state settles
                 if (firstUnansweredIdx < fields.length) {
                     askQuestion(fields[firstUnansweredIdx]);
                 }
 
             } catch (err) {
+                if (cancelled) return;
                 console.error('[Brief] Resume failed:', err);
                 setResumeError('Failed to resume your brief. Please try starting a new one.');
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
         resumeBrief();
+        return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 

@@ -37,12 +37,13 @@ const useLoginViewModel = (): LoginViewModel => {
         try {
             const data = await authService.login(formData.email, formData.password);
 
-            // Redirect based on role
-            if (data.role === 'client') {
-                navigate('/client-home');
-            } else {
-                navigate('/dashboard');
-            }
+            const dashboardByRole: Record<string, string> = {
+                client:   '/client-dashboard',
+                manager:  '/manager-dashboard',
+                employee: '/worker-dashboard',
+                admin:    '/admin-dashboard',
+            };
+            navigate(dashboardByRole[data.role] ?? '/dashboard');
         } catch (err) {
             console.error(err);
             const axiosErr = err as AxiosError<{ detail?: string }>;

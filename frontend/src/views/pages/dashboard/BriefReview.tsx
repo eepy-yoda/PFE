@@ -162,7 +162,11 @@ const BriefReview: React.FC = () => {
                         </div>
                         
                         <div className="prose prose-sm max-w-none text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap font-medium">
-                            {project.brief_content || 'Brief content is empty. Check n8n logs.'}
+                            {project.brief_content || (
+                                <span className="text-gray-400 italic text-sm">
+                                    Brief content is still being processed by the workflow. Refresh the page in a moment.
+                                </span>
+                            )}
                         </div>
 
                         {project.clarification_notes && (

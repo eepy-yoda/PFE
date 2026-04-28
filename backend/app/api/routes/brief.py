@@ -115,14 +115,16 @@ def _call_n8n(
 
         if not strict_response:
             # Delivery-only mode: 2xx = n8n accepted the request.
-            # Honor structured response (created / schema / status) when present;
-            # fall back to delivery-confirmed sentinel for empty/non-structured bodies.
+            # Return any structured response that carries actionable data;
+            # fall back to async sentinel only for empty/noise bodies.
+            _ACTIONABLE_KEYS = frozenset({"mode", "status", "code", "brief_content", "fields", "type"})
             if raw:
                 parsed = _parse_n8n_response(raw)
-                if parsed and ("mode" in parsed or "status" in parsed):
+                if parsed and any(k in parsed for k in _ACTIONABLE_KEYS):
                     logger.info(
-                        "[Brief/N8N] Structured response: mode=%s status=%s",
-                        parsed.get("mode"), parsed.get("status")
+                        "[Brief/N8N] Structured response: mode=%s status=%s code=%s has_brief_content=%s",
+                        parsed.get("mode"), parsed.get("status"), parsed.get("code"),
+                        "brief_content" in parsed
                     )
                     return parsed
                 # Non-empty body but no actionable keys (e.g. {"ok":true}, {"noWebhookResponse":true})
