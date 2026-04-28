@@ -154,7 +154,7 @@ const ClientDashboard: React.FC = () => {
                             onClick={() => navigate('/guided-brief')}
                             className="bg-primary text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all flex items-center gap-2"
                         >
-                            <Plus size={18} /> New Request
+                            <Plus size={18} /> New Brief
                         </button>
                     </div>
                 </div>
