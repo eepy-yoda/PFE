@@ -244,7 +244,7 @@ const WorkerManagement: React.FC = () => {
                                                     setFormData({...formData, role_ids: values});
                                                 }}
                                             >
-                                                {roles.map(r => (
+                                                {roles.filter(r => r.name.toLowerCase() !== 'admin').map(r => (
                                                     <option key={r.id} value={r.id}>{r.name}</option>
                                                 ))}
                                             </select>

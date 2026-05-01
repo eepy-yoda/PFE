@@ -298,17 +298,21 @@ const GuidedBrief: React.FC = () => {
 
     const askQuestion = (field: BriefField) => {
         setIsTyping(true);
+        const msgId = `bot-${field.key}-${Date.now()}`;
         setTimeout(() => {
-            const msg: Message = {
-                id: Math.random().toString(36).substring(7),
-                role: 'bot',
-                content: field.label,
-                timestamp: new Date(),
-                type: field.type === 'select' || field.type === 'multiselect' ? 'options' : 'input',
-                options: field.options,
-                fieldKey: field.key,
-            };
-            setMessages(prev => [...prev, msg]);
+            setMessages(prev => {
+                // Prevent duplicate: skip if a message with same fieldKey already exists
+                if (prev.some(m => m.fieldKey === field.key && m.role === 'bot')) return prev;
+                return [...prev, {
+                    id: msgId,
+                    role: 'bot',
+                    content: field.label,
+                    timestamp: new Date(),
+                    type: field.type === 'select' || field.type === 'multiselect' ? 'options' : 'input',
+                    options: field.options,
+                    fieldKey: field.key,
+                }];
+            });
             setIsTyping(false);
         }, 800);
     };
@@ -510,7 +514,7 @@ const GuidedBrief: React.FC = () => {
     // ── Render ────────────────────────────────────────────────────────────────
 
     return (
-        <div className="min-h-screen bg-[#050505] text-white selection:bg-primary/30">
+        <div className="min-h-screen bg-gray-50 dark:bg-[#050505] text-gray-900 dark:text-white selection:bg-primary/30">
             <div className="fixed inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-600/10 blur-[120px] rounded-full" />
                 <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-purple-600/10 blur-[120px] rounded-full" />
@@ -526,11 +530,11 @@ const GuidedBrief: React.FC = () => {
                         <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
                             <Sparkles className="w-6 h-6 text-white" />
                         </div>
-                        <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
+                        <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-500 dark:from-white dark:to-gray-400">
                             Guided Project Briefing
                         </h1>
                     </motion.div>
-                    <p className="text-gray-400 max-w-lg mx-auto">Let's define your project vision together.</p>
+                    <p className="text-gray-500 dark:text-gray-400 max-w-lg mx-auto">Let's define your project vision together.</p>
                 </header>
 
                 {localBackup && step === 'initial' && (
@@ -574,7 +578,7 @@ const GuidedBrief: React.FC = () => {
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-[#0f0f0f]/80 backdrop-blur-2xl border border-white/10 rounded-3xl p-16 flex flex-col items-center justify-center space-y-8 shadow-[0_0_50px_-12px_rgba(59,130,246,0.3)] min-h-[450px]"
+                            className="bg-white/90 dark:bg-[#0f0f0f]/80 backdrop-blur-2xl border border-gray-200 dark:border-white/10 rounded-3xl p-16 flex flex-col items-center justify-center space-y-8 shadow-[0_0_50px_-12px_rgba(59,130,246,0.3)] min-h-[450px]"
                         >
                             <div className="relative">
                                 <motion.div
@@ -592,12 +596,12 @@ const GuidedBrief: React.FC = () => {
                                 </div>
                             </div>
                             <div className="text-center space-y-4">
-                                <h2 className="text-2xl font-bold text-white tracking-tight">Consulting AI Strategist</h2>
-                                <p className="text-gray-400 text-sm max-w-sm leading-relaxed">
+                                <h2 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">Consulting AI Strategist</h2>
+                                <p className="text-gray-500 dark:text-gray-400 text-sm max-w-sm leading-relaxed">
                                     Analyzing your project seeds to build a custom briefing experience…
                                 </p>
                             </div>
-                            <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full border border-white/10">
+                            <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-white/5 rounded-full border border-gray-200 dark:border-white/10">
                                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
                                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">Securely connecting to system</span>
                             </div>
@@ -611,40 +615,40 @@ const GuidedBrief: React.FC = () => {
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 1.05 }}
-                            className="bg-[#0f0f0f]/80 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden shadow-2xl p-8 space-y-8"
+                            className="bg-white dark:bg-[#0f0f0f]/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-2xl p-8 space-y-8"
                         >
                             <form onSubmit={handleInitialSubmit} className="space-y-8">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-300 ml-1">
+                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 ml-1">
                                             <Layout className="w-4 h-4 text-primary" /> Project Name
                                         </label>
                                         <input
                                             required type="text"
                                             placeholder="e.g. Summer Marketing Campaign"
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-gray-600"
+                                            className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-600"
                                             value={seed.project_name}
                                             onChange={e => setSeed({ ...seed, project_name: e.target.value })}
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-300 ml-1">
+                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 ml-1">
                                             <Target className="w-4 h-4 text-primary" /> Main Objective
                                         </label>
                                         <input
                                             required type="text"
                                             placeholder="e.g. Increase brand awareness"
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-gray-600"
+                                            className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-gray-400 dark:placeholder:text-gray-600"
                                             value={seed.objective}
                                             onChange={e => setSeed({ ...seed, objective: e.target.value })}
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-300 ml-1">
+                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 ml-1">
                                             <Palette className="w-4 h-4 text-primary" /> Brand Tone
                                         </label>
                                         <select
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none"
+                                            className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none"
                                             value={seed.tone}
                                             onChange={e => setSeed({ ...seed, tone: e.target.value })}
                                         >
@@ -654,11 +658,11 @@ const GuidedBrief: React.FC = () => {
                                         </select>
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-300 ml-1">
+                                        <label className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-300 ml-1">
                                             <Languages className="w-4 h-4 text-primary" /> Language
                                         </label>
                                         <select
-                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none"
+                                            className="w-full bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all appearance-none"
                                             value={seed.language}
                                             onChange={e => setSeed({ ...seed, language: e.target.value })}
                                         >
@@ -669,7 +673,7 @@ const GuidedBrief: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="space-y-4">
-                                    <label className="block text-sm font-medium text-gray-300 ml-1">Platforms</label>
+                                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 ml-1">Platforms</label>
                                     <div className="flex flex-wrap gap-3">
                                         {['Instagram', 'LinkedIn', 'Facebook', 'Twitter', 'TikTok', 'Email', 'Web'].map(p => (
                                             <button
@@ -678,7 +682,7 @@ const GuidedBrief: React.FC = () => {
                                                     "px-4 py-2 rounded-full border text-sm transition-all duration-300",
                                                     seed.platforms.includes(p)
                                                         ? "bg-primary border-primary text-white shadow-lg shadow-primary/30"
-                                                        : "border-white/10 text-gray-400 hover:border-white/30"
+                                                        : "border-gray-300 dark:border-white/10 text-gray-500 dark:text-gray-400 hover:border-gray-400 dark:hover:border-white/30"
                                                 )}
                                             >{p}</button>
                                         ))}
@@ -704,10 +708,10 @@ const GuidedBrief: React.FC = () => {
                             key="chat"
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="bg-[#0f0f0f]/80 backdrop-blur-xl border border-white/10 rounded-2xl flex flex-col h-[600px] shadow-2xl relative overflow-hidden"
+                            className="bg-white dark:bg-[#0f0f0f]/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-2xl flex flex-col h-[600px] shadow-2xl relative overflow-hidden"
                         >
                             {/* Progress bar */}
-                            <div className="absolute top-0 left-0 w-full h-1 bg-white/5">
+                            <div className="absolute top-0 left-0 w-full h-1 bg-gray-100 dark:bg-white/5">
                                 <motion.div
                                     animate={{
                                         width: `${(currentFieldIdx / (allFields.length || 1)) * 100}%`
@@ -719,13 +723,13 @@ const GuidedBrief: React.FC = () => {
 
                             {/* Progress label */}
                             {allFields.length > 0 && (
-                                <div className="absolute top-2 right-4 text-[10px] text-gray-500 font-medium">
+                                <div className="absolute top-2 right-4 text-[10px] text-gray-400 dark:text-gray-500 font-medium">
                                     {Math.min(currentFieldIdx, allFields.length)}/{allFields.length}
                                 </div>
                             )}
 
                             {/* Messages */}
-                            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-white/10 mt-2">
+                            <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-gray-200 dark:scrollbar-thumb-white/10 mt-2">
                                 {messages.map((m) => (
                                     <motion.div
                                         key={m.id}
@@ -738,14 +742,14 @@ const GuidedBrief: React.FC = () => {
                                     >
                                         <div className={cn(
                                             "w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-1",
-                                            m.role === 'bot' ? "bg-primary/20 text-primary" : "bg-white/10 text-gray-300"
+                                            m.role === 'bot' ? "bg-primary/20 text-primary" : "bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300"
                                         )}>
                                             {m.role === 'bot' ? <Bot className="w-5 h-5" /> : <User className="w-5 h-5" />}
                                         </div>
                                         <div className={cn(
                                             "px-4 py-3 rounded-2xl text-sm leading-relaxed",
                                             m.role === 'bot'
-                                                ? "bg-white/5 text-gray-200 rounded-tl-none border border-white/5"
+                                                ? "bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-200 rounded-tl-none border border-gray-200 dark:border-white/5"
                                                 : "bg-primary text-white rounded-tr-none shadow-lg shadow-primary/10"
                                         )}>
                                             {m.content}
@@ -756,7 +760,7 @@ const GuidedBrief: React.FC = () => {
                                                             key={opt}
                                                             disabled={loading || isSubmittingFinalRef.current}
                                                             onClick={() => handleSendMessage(opt, m.fieldKey)}
-                                                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs transition-colors"
+                                                            className="px-3 py-1.5 bg-white/20 dark:bg-white/10 hover:bg-white/30 dark:hover:bg-white/20 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs transition-colors"
                                                         >{opt}</button>
                                                     ))}
                                                 </div>
@@ -770,7 +774,7 @@ const GuidedBrief: React.FC = () => {
                                         <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
                                             <Bot className="w-5 h-5" />
                                         </div>
-                                        <div className="bg-white/5 px-4 py-2 rounded-2xl rounded-tl-none border border-white/5 flex gap-1 items-center">
+                                        <div className="bg-gray-100 dark:bg-white/5 px-4 py-2 rounded-2xl rounded-tl-none border border-gray-200 dark:border-white/5 flex gap-1 items-center">
                                             {[0, 0.2, 0.4].map((delay, i) => (
                                                 <motion.div
                                                     key={i}
@@ -785,7 +789,7 @@ const GuidedBrief: React.FC = () => {
                             </div>
 
                             {/* Input */}
-                            <div className="p-4 border-t border-white/10 bg-white/[0.02]">
+                            <div className="p-4 border-t border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/[0.02]">
                                 <form
                                     onSubmit={(e) => {
                                         e.preventDefault();
@@ -803,7 +807,7 @@ const GuidedBrief: React.FC = () => {
                                         value={inputValue}
                                         onChange={e => setInputValue(e.target.value)}
                                         placeholder="Type your answer…"
-                                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all text-sm"
+                                        className="flex-1 bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl px-4 py-3 text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-primary/40 transition-all text-sm"
                                     />
                                     <button
                                         disabled={loading || !inputValue.trim()}
@@ -842,7 +846,7 @@ const GuidedBrief: React.FC = () => {
                             key="complete"
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="bg-[#0f0f0f]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-12 text-center shadow-2xl"
+                            className="bg-white dark:bg-[#0f0f0f]/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 rounded-2xl p-12 text-center shadow-2xl"
                         >
                             <div className={cn(
                                 "w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6",
@@ -856,13 +860,13 @@ const GuidedBrief: React.FC = () => {
                             {briefingStatus === 'created' ? (
                                 <>
                                     <h2 className="text-3xl font-bold mb-4">Brief Created!</h2>
-                                    <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
                                         Your project brief has been successfully created.
                                     </p>
                                     {finalBrief && (
-                                        <div className="bg-white/5 border border-white/10 rounded-xl p-6 mb-8 text-left">
+                                        <div className="bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl p-6 mb-8 text-left">
                                             <h3 className="text-xs font-bold tracking-widest text-primary mb-3 uppercase">Summary</h3>
-                                            <div className="text-gray-300 italic whitespace-pre-wrap">
+                                            <div className="text-gray-600 dark:text-gray-300 italic whitespace-pre-wrap">
                                                 "{finalBrief}"
                                             </div>
                                         </div>
@@ -871,7 +875,7 @@ const GuidedBrief: React.FC = () => {
                             ) : (
                                 <>
                                     <h2 className="text-3xl font-bold mb-4">Brief Submitted!</h2>
-                                    <p className="text-gray-400 mb-8 max-w-md mx-auto">
+                                    <p className="text-gray-500 dark:text-gray-400 mb-8 max-w-md mx-auto">
                                         Your brief has been received and is being processed. Your manager will be notified when it's ready.
                                     </p>
                                 </>
@@ -879,7 +883,7 @@ const GuidedBrief: React.FC = () => {
 
                             <button
                                 onClick={() => navigate('/client-dashboard')}
-                                className="inline-flex items-center gap-2 bg-white text-black font-bold px-8 py-3 rounded-xl hover:bg-gray-200 transition-colors"
+                                className="inline-flex items-center gap-2 bg-gray-900 dark:bg-white text-white dark:text-black font-bold px-8 py-3 rounded-xl hover:bg-gray-700 dark:hover:bg-gray-200 transition-colors"
                             >
                                 Go to Dashboard <ChevronRight className="w-5 h-5" />
                             </button>
