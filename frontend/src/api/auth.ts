@@ -141,6 +141,10 @@ export const authService = {
         localStorage.removeItem('token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
+        // Clear brief backups so they don't leak to the next user on this browser
+        Object.keys(localStorage)
+            .filter(k => k.startsWith('brief_backup_'))
+            .forEach(k => localStorage.removeItem(k));
     },
 
     getCurrentUser(): CurrentUser | null {

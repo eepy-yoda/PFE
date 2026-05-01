@@ -34,7 +34,7 @@ class TaskUpdate(BaseModel):
     delivery_state: Optional[DeliveryState] = None
 
 
-class TaskRead(TaskBase):
+class TaskShortRead(TaskBase):
     id: UUID
     project_id: UUID
     status: TaskStatus
@@ -44,7 +44,6 @@ class TaskRead(TaskBase):
     created_at: datetime
     updated_at: datetime
     project_name: Optional[str] = None  # populated via Task.project_name property
-    project_brief: Optional[str] = None # populated via Task.project_brief property
     payment_status: Optional[PaymentStatus] = None
     amount_paid: Optional[float] = None
     final_delivered_at: Optional[datetime] = None
@@ -53,6 +52,10 @@ class TaskRead(TaskBase):
     last_payment_update_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TaskRead(TaskShortRead):
+    project_brief: Optional[str] = None # populated via Task.project_brief property
 
 
 # --- Submission Schemas ---

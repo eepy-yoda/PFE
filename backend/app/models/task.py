@@ -80,7 +80,7 @@ class TaskSubmission(Base):
     __tablename__ = "task_submissions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=False)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=False, index=True)
     submitted_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
 
     content = Column(Text, nullable=True)
@@ -124,7 +124,7 @@ class TaskFeedback(Base):
     __tablename__ = "task_feedback"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=False)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id"), nullable=False, index=True)
     submission_id = Column(UUID(as_uuid=True), ForeignKey("task_submissions.id"), nullable=True)
     sent_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     sent_to = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)

@@ -612,5 +612,9 @@ class SubmissionService:
         db.refresh(submission)
         return submission
 
+    @staticmethod
+    def get_submission(db: Session, submission_id: UUID) -> Optional[TaskSubmission]:
+        return db.query(TaskSubmission).filter(TaskSubmission.id == submission_id).first()
+
 
 submission_service = SubmissionService()

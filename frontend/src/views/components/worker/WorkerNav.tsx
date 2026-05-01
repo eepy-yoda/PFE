@@ -4,12 +4,14 @@ import {
     LayoutDashboard,
     CheckSquare,
     MessageSquare,
+    Briefcase,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-    { to: '/worker-dashboard', icon: LayoutDashboard, label: 'Overview',  end: true },
-    { to: '/worker/tasks',     icon: CheckSquare,    label: 'My Tasks',   end: false },
-    { to: '/worker/feedback',  icon: MessageSquare,  label: 'Feedback',   end: false },
+    { to: '/worker-dashboard',  icon: LayoutDashboard, label: 'Overview',  end: true },
+    { to: '/worker/tasks',      icon: CheckSquare,     label: 'My Tasks',  end: false },
+    { to: '/worker/projects',   icon: Briefcase,       label: 'Projects',  end: false },
+    { to: '/worker/feedback',   icon: MessageSquare,   label: 'Feedback',  end: false },
 ];
 
 const WorkerNav: React.FC = () => (

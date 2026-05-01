@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from app.db.session import get_db
 from app.schemas.project import (
     ProjectCreate, ProjectRead, ProjectUpdate,
+    WorkerProjectRead,
     WorkerStat, RevenueSnapshot, WorkloadTaskItem,
     TaskWorkloadSnapshot, ProjectSnapshot,
     DashboardAlertItem, ManagerDashboardData,
@@ -334,6 +335,61 @@ def get_my_brief_history(
     ).order_by(Project.created_at.desc()).all()
 
 
+@router.get("/worker-projects/", response_model=List[WorkerProjectRead])
+def get_worker_projects(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != UserRole.employee:
+        raise HTTPException(status_code=403, detail="Employee access required")
+
+    from sqlalchemy import or_
+    from app.models.task import task_assignments
+
+    project_ids_via_direct = {
+        pid for (pid,) in db.query(Task.project_id)
+        .filter(Task.assigned_to == current_user.id)
+        .distinct().all()
+    }
+    project_ids_via_junction = {
+        pid for (pid,) in db.query(Task.project_id)
+        .join(task_assignments, task_assignments.c.task_id == Task.id)
+        .filter(task_assignments.c.user_id == current_user.id)
+        .distinct().all()
+    }
+    all_task_project_ids = list(project_ids_via_direct | project_ids_via_junction)
+
+    projects = db.query(Project).filter(
+        or_(Project.assigned_to == current_user.id, Project.id.in_(all_task_project_ids))
+    ).all()
+
+    result = []
+    for project in projects:
+        total_tasks = db.query(func.count(Task.id)).filter(Task.project_id == project.id).scalar() or 0
+
+        direct_assigned = db.query(func.count(Task.id)).filter(
+            Task.project_id == project.id,
+            Task.assigned_to == current_user.id,
+        ).scalar() or 0
+        junction_assigned = db.query(func.count(Task.id)).filter(
+            Task.project_id == project.id,
+        ).join(task_assignments, task_assignments.c.task_id == Task.id).filter(
+            task_assignments.c.user_id == current_user.id,
+        ).scalar() or 0
+        assigned_tasks = max(direct_assigned, junction_assigned)
+
+        result.append(WorkerProjectRead(
+            id=project.id,
+            name=project.name,
+            status=project.status,
+            deadline=project.deadline,
+            created_at=project.created_at,
+            task_count=total_tasks,
+            assigned_task_count=assigned_tasks,
+        ))
+    return result
+
+
 # ── PARAMETERIZED ROUTES (after all static routes) ───────────────────────────
 
 @router.get("/{project_id}", response_model=ProjectRead)
@@ -517,11 +573,28 @@ def generate_ai_resume(
     }
 
     try:
-        response = requests.post(settings.N8N_AI_RESUME_WEBHOOK_URL, json=payload, timeout=30)
+        response = requests.post(settings.N8N_AI_RESUME_WEBHOOK_URL, json=payload, timeout=45)
         response.raise_for_status()
-        return response.json()
+        
+        # Check if response is empty
+        if not response.text:
+            logger.error("AI Resume Webhook returned an empty response")
+            raise HTTPException(status_code=502, detail="AI service returned an empty response.")
+            
+        try:
+            return response.json()
+        except ValueError:
+            logger.error("AI Resume Webhook returned non-JSON content: %s", response.text[:200])
+            raise HTTPException(status_code=502, detail="AI service returned invalid data format.")
+            
+    except requests.exceptions.Timeout:
+        logger.error("AI Resume Webhook timed out after 45s")
+        raise HTTPException(status_code=504, detail="AI service timed out.")
     except requests.exceptions.RequestException as e:
         logger.error("AI Resume Webhook failed: %s", e)
+        # If it's an HTTP error, try to log the body
+        if hasattr(e, 'response') and e.response is not None:
+             logger.error("Error response body: %s", e.response.text[:500])
         raise HTTPException(status_code=502, detail="Failed to reach the AI service.")
 
 
@@ -555,6 +628,31 @@ def mark_project_paid(
     db.commit()
     db.refresh(project)
     return project
+
+
+@router.delete("/{project_id}", status_code=204)
+def delete_project(
+    project_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_manager_or_admin(current_user)
+    project = project_service.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    from app.models.task import TaskFeedback as TaskFeedbackModel, TaskSubmission as TaskSubmissionModel, task_assignments
+    from app.models.workflow_image_callback import WorkflowImageCallback
+    task_ids = [t.id for t in db.query(Task).filter(Task.project_id == project.id).all()]
+    if task_ids:
+        sub_ids = [s.id for s in db.query(TaskSubmission).filter(TaskSubmission.task_id.in_(task_ids)).all()]
+        if sub_ids:
+            db.query(WorkflowImageCallback).filter(WorkflowImageCallback.submission_id.in_(sub_ids)).delete(synchronize_session=False)
+        db.query(TaskFeedbackModel).filter(TaskFeedbackModel.task_id.in_(task_ids)).delete(synchronize_session=False)
+        db.query(TaskSubmission).filter(TaskSubmission.task_id.in_(task_ids)).delete(synchronize_session=False)
+        db.execute(task_assignments.delete().where(task_assignments.c.task_id.in_(task_ids)))
+        db.query(Task).filter(Task.project_id == project.id).delete(synchronize_session=False)
+    db.delete(project)
+    db.commit()
 
 
 @router.post("/{project_id}/partial-delivery")

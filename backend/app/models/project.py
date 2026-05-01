@@ -78,5 +78,5 @@ class Project(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    tasks = relationship("Task", back_populates="project", lazy="dynamic")
+    tasks = relationship("Task", back_populates="project", lazy="select")
 

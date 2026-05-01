@@ -2,19 +2,17 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    ArrowLeft, AlertTriangle, Calendar, Clock, Send,
-    MessageSquare, Play, Square, Plus, Trash2, ChevronDown,
-    ChevronUp, FileText, CheckCircle2, RotateCcw, Timer,
-    History, Activity, Upload,
+    ArrowLeft, ArrowRight, Calendar, Clock, Send,
+    MessageSquare, ChevronDown,
+    ChevronUp, FileText, Activity, Upload,
 } from 'lucide-react';
 import WorkerNav from '../../components/worker/WorkerNav';
 import SubmitWorkModal from '../../../components/SubmitWorkModal';
 import AIAnalysisCard from '../../../components/AIAnalysisCard';
 import { projectsService } from '../../../api/projects';
 import { submissionsApi } from '../../../api/submissions';
-import { timeTrackingApi, formatDuration } from '../../../api/timeTracking';
 import { workerApi } from '../../../api/worker';
-import type { Task, TaskSubmission, TaskFeedback, TimeLog, ActivityEvent } from '../../../types';
+import type { Task, TaskSubmission, TaskFeedback, ActivityEvent } from '../../../types';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -73,86 +71,6 @@ const Section: React.FC<{ title: string; icon: React.ElementType; children: Reac
     );
 };
 
-// ── manual time entry form ────────────────────────────────────────────────────
-
-interface ManualEntryFormProps {
-    taskId: string;
-    onSaved: () => void;
-}
-
-const ManualEntryForm: React.FC<ManualEntryFormProps> = ({ taskId, onSaved }) => {
-    const [show, setShow] = useState(false);
-    const [start, setStart] = useState('');
-    const [end, setEnd] = useState('');
-    const [desc, setDesc] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
-
-    const submit = async () => {
-        if (!start || !end) { setError('Start and end required'); return; }
-        setLoading(true);
-        setError('');
-        try {
-            await timeTrackingApi.createManualEntry({
-                task_id: taskId,
-                start_time: new Date(start).toISOString(),
-                end_time: new Date(end).toISOString(),
-                description: desc || undefined,
-            });
-            setStart(''); setEnd(''); setDesc('');
-            setShow(false);
-            onSaved();
-        } catch (e: any) {
-            setError(e?.response?.data?.detail || 'Failed to save');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    if (!show) {
-        return (
-            <button
-                onClick={() => setShow(true)}
-                className="flex items-center gap-1.5 text-xs font-bold text-primary hover:underline"
-            >
-                <Plus size={13} /> Add manual entry
-            </button>
-        );
-    }
-
-    return (
-        <div className="mt-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-                <div>
-                    <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">Start</label>
-                    <input type="datetime-local" value={start} onChange={e => setStart(e.target.value)}
-                        className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                </div>
-                <div>
-                    <label className="text-[10px] font-bold uppercase text-gray-400 block mb-1">End</label>
-                    <input type="datetime-local" value={end} onChange={e => setEnd(e.target.value)}
-                        className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                </div>
-            </div>
-            <input
-                value={desc} onChange={e => setDesc(e.target.value)}
-                placeholder="Description (optional)"
-                className="w-full text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-            {error && <p className="text-xs text-red-500">{error}</p>}
-            <div className="flex gap-2">
-                <button onClick={submit} disabled={loading}
-                    className="px-4 py-1.5 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 disabled:opacity-50">
-                    Save
-                </button>
-                <button onClick={() => setShow(false)} className="px-4 py-1.5 text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white">
-                    Cancel
-                </button>
-            </div>
-        </div>
-    );
-};
-
 // ── main component ────────────────────────────────────────────────────────────
 
 const TaskWorkspace: React.FC = () => {
@@ -162,31 +80,22 @@ const TaskWorkspace: React.FC = () => {
     const [task, setTask] = useState<Task | null>(null);
     const [submissions, setSubmissions] = useState<TaskSubmission[]>([]);
     const [feedbacks, setFeedbacks] = useState<TaskFeedback[]>([]);
-    const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
-    const [activeTimer, setActiveTimer] = useState<TimeLog | null>(null);
     const [activity, setActivity] = useState<ActivityEvent[]>([]);
     const [loading, setLoading] = useState(true);
-    const [timerSeconds, setTimerSeconds] = useState(0);
     const [submitModalOpen, setSubmitModalOpen] = useState(false);
 
     const loadData = useCallback(async () => {
         if (!taskId) return;
         try {
-            const [t, subs, fbs, logs, act] = await Promise.allSettled([
-                projectsService.getMyTasks().then(all => all.find(x => x.id === taskId) ?? Promise.reject('not found')),
+            const [t, subs, fbs, act] = await Promise.allSettled([
+                projectsService.getTaskById(taskId),
                 submissionsApi.getForTask(taskId),
                 projectsService.getTaskFeedbacks(taskId),
-                timeTrackingApi.getLogs(taskId),
                 workerApi.getTaskActivity(taskId),
             ]);
             if (t.status === 'fulfilled') setTask(t.value);
             if (subs.status === 'fulfilled') setSubmissions(subs.value);
             if (fbs.status === 'fulfilled') setFeedbacks(fbs.value);
-            if (logs.status === 'fulfilled') {
-                setTimeLogs(logs.value);
-                const active = logs.value.find(l => !l.end_time && !l.is_manual);
-                setActiveTimer(active ?? null);
-            }
             if (act.status === 'fulfilled') setActivity(act.value);
         } catch (e) {
             console.error(e);
@@ -196,48 +105,6 @@ const TaskWorkspace: React.FC = () => {
     }, [taskId]);
 
     useEffect(() => { loadData(); }, [loadData]);
-
-    // Live timer tick
-    useEffect(() => {
-        if (!activeTimer) { setTimerSeconds(0); return; }
-        const elapsed = Math.floor((Date.now() - new Date(activeTimer.start_time).getTime()) / 1000);
-        setTimerSeconds(elapsed);
-        const interval = setInterval(() => setTimerSeconds(s => s + 1), 1000);
-        return () => clearInterval(interval);
-    }, [activeTimer]);
-
-    const handleStartTimer = async () => {
-        if (!taskId) return;
-        try {
-            const log = await timeTrackingApi.startTimer(taskId);
-            setActiveTimer(log);
-        } catch (e: any) {
-            console.error(e?.response?.data?.detail || e);
-        }
-    };
-
-    const handleStopTimer = async () => {
-        try {
-            await timeTrackingApi.stopTimer();
-            setActiveTimer(null);
-            await loadData();
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
-    const handleDeleteLog = async (logId: string) => {
-        try {
-            await timeTrackingApi.deleteLog(logId);
-            setTimeLogs(prev => prev.filter(l => l.id !== logId));
-        } catch (e) {
-            console.error(e);
-        }
-    };
-
-    const totalTimeSeconds = timeLogs
-        .filter(l => l.end_time)
-        .reduce((acc, l) => acc + (l.duration_seconds ?? 0), 0);
 
     if (loading) {
         return (
@@ -266,8 +133,6 @@ const TaskWorkspace: React.FC = () => {
 
     const dl = deadlineLabel(task.deadline);
     const latestSubmission = submissions[0];
-    const managerFeedbacks = feedbacks.filter(fb => !fb.is_revision_request || true);
-    const revisionFeedbacks = feedbacks.filter(fb => fb.is_revision_request);
 
     return (
         <>
@@ -336,15 +201,26 @@ const TaskWorkspace: React.FC = () => {
                                 {submissions.length === 0 ? 'No submissions yet.' : `${submissions.length} submission${submissions.length !== 1 ? 's' : ''} — attempt #${(latestSubmission?.attempt_number ?? 0) + 1} next`}
                             </p>
                         </div>
-                        {!['approved', 'completed'].includes(task.status) && (
-                            <button
-                                onClick={() => setSubmitModalOpen(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
-                            >
-                                <Send size={14} />
-                                {submissions.length === 0 ? 'Submit Work' : 'Resubmit'}
-                            </button>
-                        )}
+                        <div className="flex gap-2">
+                            {latestSubmission && (
+                                <button
+                                    onClick={() => navigate(`/worker/tasks/${taskId}/review/${latestSubmission.id}`)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400 text-sm font-bold rounded-xl hover:bg-violet-200 dark:hover:bg-violet-900/50 transition-all"
+                                >
+                                    <Activity size={14} />
+                                    View AI Review
+                                </button>
+                            )}
+                            {!['approved', 'completed'].includes(task.status) && (
+                                <button
+                                    onClick={() => setSubmitModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-bold rounded-xl hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                                >
+                                    <Send size={14} />
+                                    {submissions.length === 0 ? 'Submit Work' : 'Resubmit'}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                     {/* Submission History */}
@@ -383,6 +259,14 @@ const TaskWorkspace: React.FC = () => {
                                                 <AIAnalysisCard aiAnalysisResult={parsedAI} />
                                             </div>
                                         )}
+                                        <div className="mt-3 flex justify-end">
+                                            <button 
+                                                onClick={() => navigate(`/worker/tasks/${taskId}/review/${sub.id}`)}
+                                                className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
+                                            >
+                                                View Detailed AI Review <ArrowRight size={12} />
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -415,63 +299,6 @@ const TaskWorkspace: React.FC = () => {
                         </div>
                     </Section>
                 )}
-
-                {/* Time Tracking */}
-                <Section title="Time Tracking" icon={Timer}>
-                    <div className="mb-4 flex items-center justify-between">
-                        <div>
-                            <div className="text-2xl font-black text-gray-900 dark:text-white">
-                                {formatDuration(totalTimeSeconds)}
-                            </div>
-                            <div className="text-[11px] text-gray-400">Total logged</div>
-                        </div>
-                        {activeTimer ? (
-                            <div className="flex items-center gap-3">
-                                <div className="flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                                    <span className="font-mono text-sm font-bold text-primary">{formatDuration(timerSeconds)}</span>
-                                </div>
-                                <button
-                                    onClick={handleStopTimer}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all"
-                                >
-                                    <Square size={12} /> Stop
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={handleStartTimer}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-primary text-white rounded-xl hover:bg-primary/90 transition-all"
-                            >
-                                <Play size={12} /> Start Timer
-                            </button>
-                        )}
-                    </div>
-
-                    <ManualEntryForm taskId={task.id} onSaved={loadData} />
-
-                    {timeLogs.length > 0 && (
-                        <div className="mt-4 space-y-2">
-                            {timeLogs.filter(l => l.end_time).map(log => (
-                                <div key={log.id} className="flex items-center justify-between text-xs py-2 border-b border-gray-50 dark:border-gray-800 last:border-0">
-                                    <div>
-                                        <span className="font-semibold text-gray-700 dark:text-gray-300">
-                                            {formatDuration(log.duration_seconds ?? 0)}
-                                        </span>
-                                        {log.description && <span className="text-gray-400 ml-2">{log.description}</span>}
-                                        {log.is_manual && <span className="ml-2 text-[10px] text-gray-400 italic">manual</span>}
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-gray-400">{new Date(log.start_time).toLocaleDateString()}</span>
-                                        <button onClick={() => handleDeleteLog(log.id)} className="text-gray-300 hover:text-red-500 transition-colors">
-                                            <Trash2 size={12} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </Section>
 
                 {/* Activity Timeline */}
                 <Section title="Activity Timeline" icon={Activity} defaultOpen={false}>

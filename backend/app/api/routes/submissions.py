@@ -114,6 +114,59 @@ def list_submissions(
     return submissions
 
 
+@router.get("/single/{submission_id}", response_model=SubmissionRead)
+def get_submission(
+    submission_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Retrieve a single submission by ID.
+    Access control:
+    - Admin/Manager: all
+    - Worker: only if they submitted it OR are currently assigned to the task
+    - Client: only if it belongs to their project (stripped fields)
+    """
+    submission = submission_service.get_submission(db, submission_id)
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    task = db.query(Task).filter(Task.id == submission.task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Access control
+    if current_user.role == UserRole.employee:
+        if submission.submitted_by != current_user.id and task.assigned_to != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+    if current_user.role == UserRole.client:
+        project = db.query(Project).filter(Project.id == task.project_id).first()
+        if not project or project.client_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Strip internal fields for client
+        submission.ai_score = None
+        submission.ai_feedback = None
+        submission.webhook_response = None
+        submission.ai_analysis_result = None
+        submission.brief_snapshot = None
+        submission.is_approved = False
+        submission.reviewed_by = None
+        
+        # Gate files based on delivery state
+        from app.models.project import DeliveryState
+        delivery_state = getattr(task, 'delivery_state', None)
+        if delivery_state != DeliveryState.final_delivered:
+            submission.file_paths = None
+            submission.links = None
+        if delivery_state not in [DeliveryState.watermark_delivered, DeliveryState.final_delivered]:
+            submission.watermarked_file_paths = None
+            submission.watermark_file_path = None
+
+    return submission
+
+
 @router.post("/webhook-callback", response_model=SubmissionRead)
 def receive_webhook_callback(
     payload: WebhookCallbackPayload,

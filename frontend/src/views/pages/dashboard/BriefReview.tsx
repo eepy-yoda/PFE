@@ -187,16 +187,6 @@ const BriefReview: React.FC = () => {
                         <section className="bg-white dark:bg-gray-900 rounded-3xl shadow-sm border border-gray-100 dark:border-gray-800 p-8 transition-all">
                             <h2 className="text-xl font-black text-gray-900 dark:text-white mb-6">Review Decision</h2>
                             <div className="space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Feedback/Notes</label>
-                                    <textarea
-                                        className="w-full bg-gray-50 dark:bg-gray-950 border-none rounded-2xl p-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/20 min-h-[120px] transition-all placeholder-gray-300 dark:placeholder-gray-700"
-                                        placeholder="Add notes for the client..."
-                                        value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
-                                    />
-                                </div>
-                                
                                 <div className="space-y-3 pt-2">
                                     <button
                                         onClick={() => handleAction('validate')}
@@ -206,7 +196,13 @@ const BriefReview: React.FC = () => {
                                         <CheckCircle2 size={18} />
                                         Validate Brief
                                     </button>
-                                    
+                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Feedback/Notes</label>
+                                    <textarea
+                                        className="w-full bg-gray-50 dark:bg-gray-950 border-none rounded-2xl p-4 text-sm font-bold text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/20 min-h-[120px] transition-all placeholder-gray-300 dark:placeholder-gray-700"
+                                        placeholder="Add notes for the client..."
+                                        value={notes}
+                                        onChange={(e) => setNotes(e.target.value)}
+                                    />
                                     <div className="grid grid-cols-2 gap-3">
                                         <button
                                             onClick={() => handleAction('clarify')}

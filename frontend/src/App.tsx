@@ -22,8 +22,9 @@ import ForgotPassword from "./views/pages/ForgotPassword";
 import MyTasksPage from "./views/pages/worker/MyTasksPage";
 import TaskWorkspace from "./views/pages/worker/TaskWorkspace";
 import FeedbackCenter from "./views/pages/worker/FeedbackCenter";
-import TimeTrackingPage from "./views/pages/worker/TimeTrackingPage";
 import NotificationCenter from "./views/pages/worker/NotificationCenter";
+import WorkerProjectsPage from "./views/pages/worker/WorkerProjectsPage";
+import AIReviewPage from "./views/pages/worker/AIReviewPage";
 
 const App: React.FC = () => {
     return (
@@ -63,12 +64,20 @@ const App: React.FC = () => {
                             element={<ProtectedRoute><TaskWorkspace /></ProtectedRoute>}
                         />
                         <Route
-                            path="/worker/feedback"
-                            element={<ProtectedRoute><FeedbackCenter /></ProtectedRoute>}
+                            path="/worker/tasks/:taskId/review/:submissionId"
+                            element={<ProtectedRoute><AIReviewPage /></ProtectedRoute>}
                         />
                         <Route
-                            path="/worker/time"
-                            element={<ProtectedRoute><TimeTrackingPage /></ProtectedRoute>}
+                            path="/worker/tasks/:taskId/review"
+                            element={<ProtectedRoute><AIReviewPage /></ProtectedRoute>}
+                        />
+                        <Route
+                            path="/worker/projects"
+                            element={<ProtectedRoute><WorkerProjectsPage /></ProtectedRoute>}
+                        />
+                        <Route
+                            path="/worker/feedback"
+                            element={<ProtectedRoute><FeedbackCenter /></ProtectedRoute>}
                         />
                         <Route
                             path="/worker/notifications"

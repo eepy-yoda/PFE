@@ -12,8 +12,9 @@ import {
     BriefSeed, BriefField, SavedAnswer,
 } from '../../api/brief';
 import { cn } from '../../lib/utils';
+import authService from '../../api/auth';
 
-const LS_KEY = (id: string) => `brief_backup_${id}`;
+const LS_KEY = (userId: string, id: string) => `brief_backup_${userId}_${id}`;
 
 type Step = 'initial' | 'chat' | 'complete';
 type BriefingStatus =
@@ -40,6 +41,7 @@ interface Message {
 const GuidedBrief: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
+    const userId = authService.getCurrentUser()?.id ?? '';
 
     const [step, setStep] = useState<Step>('initial');
     const [loading, setLoading] = useState(false);
@@ -139,7 +141,7 @@ const GuidedBrief: React.FC = () => {
                 briefingStatus: briefingStatusRef.current,
                 savedAt: new Date().toISOString(),
             };
-            localStorage.setItem(LS_KEY(sid), JSON.stringify(backup));
+            localStorage.setItem(LS_KEY(userId, sid), JSON.stringify(backup));
         };
 
         document.addEventListener('visibilitychange', onVisibilityChange);
@@ -154,8 +156,9 @@ const GuidedBrief: React.FC = () => {
 
     useEffect(() => {
         if (searchParams.get('resume')) return; // handled by resume flow below
-        // Scan localStorage for any brief backup saved from a previous session
-        const keys = Object.keys(localStorage).filter(k => k.startsWith('brief_backup_'));
+        if (!userId) return; // not authenticated — skip
+        // Scan localStorage for brief backups belonging to the current user only
+        const keys = Object.keys(localStorage).filter(k => k.startsWith(`brief_backup_${userId}_`));
         if (keys.length === 0) return;
         // Pick the most recent backup
         const backups = keys
@@ -352,7 +355,7 @@ const GuidedBrief: React.FC = () => {
                 setBriefingStatus('created');
                 setStep('complete');
                 setFinalBrief(result.brief_content || 'Your brief has been successfully created.');
-                localStorage.removeItem(LS_KEY(sid));
+                localStorage.removeItem(LS_KEY(userId, sid));
                 setLocalBackup(null);
 
             } else if (result.status === 'submitted') {
@@ -361,7 +364,7 @@ const GuidedBrief: React.FC = () => {
                 setBriefingStatus('submitted');
                 setStep('complete');
                 setFinalBrief(null); // will show generic "submitted" message in complete screen
-                localStorage.removeItem(LS_KEY(sid));
+                localStorage.removeItem(LS_KEY(userId, sid));
                 setLocalBackup(null);
 
             } else if (result.status === 'clarification') {
@@ -452,7 +455,7 @@ const GuidedBrief: React.FC = () => {
                 briefingStatus: 'in_progress',
                 savedAt: new Date().toISOString(),
             };
-            localStorage.setItem(LS_KEY(sessionId), JSON.stringify(backup));
+            localStorage.setItem(LS_KEY(userId, sessionId), JSON.stringify(backup));
         }
 
         // Reset interrupt flag since we just saved new progress
@@ -552,7 +555,7 @@ const GuidedBrief: React.FC = () => {
                             </button>
                             <button
                                 onClick={() => {
-                                    localStorage.removeItem(LS_KEY(localBackup.sessionId));
+                                    localStorage.removeItem(LS_KEY(userId, localBackup.sessionId));
                                     setLocalBackup(null);
                                 }}
                                 className="text-xs text-amber-500/60 hover:text-amber-400 px-2 py-1.5 transition-colors"

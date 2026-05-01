@@ -6,10 +6,10 @@ from app.db.session import get_db
 from app.api.deps import get_current_user, get_current_user_optional
 from app.core.config import settings
 from app.models.user import User, UserRole
-from app.models.task import Task, TaskFeedback as TaskFeedbackModel
+from app.models.task import Task, TaskStatus, TaskFeedback as TaskFeedbackModel
 from app.models.project import Project
 from app.schemas.task import (
-    TaskCreate, TaskUpdate, TaskRead,
+    TaskCreate, TaskUpdate, TaskRead, TaskShortRead,
     TaskSubmissionCreate, TaskSubmissionRead,
     TaskFeedbackCreate, TaskFeedbackRead,
     AIReviewResult, SubmissionWebhookResult,
@@ -51,7 +51,7 @@ def create_task(
     return task_service.create_task(db, task_in, current_user.id)
 
 
-@router.get("/project/{project_id}", response_model=List[TaskRead])
+@router.get("/project/{project_id}", response_model=List[TaskShortRead])
 def list_tasks_for_project(
     project_id: UUID,
     db: Session = Depends(get_db),
@@ -65,7 +65,7 @@ def list_tasks_for_project(
     return task_service.get_tasks_for_project(db, project_id)
 
 
-@router.get("/my", response_model=List[TaskRead])
+@router.get("/my", response_model=List[TaskShortRead])
 def list_my_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -81,7 +81,6 @@ def get_worker_summary(
     """Aggregated dashboard stats for the current worker."""
     _require_employee_or_above(current_user)
     from app.models.activity import ActivityLog
-    from app.services.time_tracking_service import time_tracking_service
 
     tasks = task_service.get_tasks_for_employee(db, current_user.id)
     now = datetime.now(timezone.utc)
@@ -137,8 +136,6 @@ def get_worker_summary(
     ]
     upcoming.sort(key=lambda t: t.deadline)
 
-    time_summary = time_tracking_service.get_summary(db, current_user.id)
-
     def _task_to_dict(t: Task) -> dict:
         return {
             "id": str(t.id),
@@ -172,9 +169,6 @@ def get_worker_summary(
         "priority_tasks": [_task_to_dict(t) for t in priority_tasks[:10]],
         "recent_feedback": [_feedback_to_dict(fb) for fb in recent_feedback],
         "upcoming_deadlines": [_task_to_dict(t) for t in upcoming[:5]],
-        "time_today_seconds": time_summary["today_seconds"],
-        "time_week_seconds": time_summary["week_seconds"],
-        "active_timer_task_id": str(time_summary["active_timer"].task_id) if time_summary["active_timer"] else None,
     }
 
 
@@ -529,6 +523,28 @@ def get_late_tasks(
 ):
     _require_manager_or_admin(current_user)
     return task_service.get_late_tasks(db)
+
+
+@router.delete("/{task_id}", status_code=204)
+def delete_task(
+    task_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _require_manager_or_admin(current_user)
+    task = task_service.get_task(db, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    from app.models.task import TaskFeedback as TaskFeedbackModel, TaskSubmission as TaskSubmissionModel, task_assignments
+    from app.models.workflow_image_callback import WorkflowImageCallback
+    sub_ids = [s.id for s in db.query(TaskSubmissionModel).filter(TaskSubmissionModel.task_id == task_id).all()]
+    if sub_ids:
+        db.query(WorkflowImageCallback).filter(WorkflowImageCallback.submission_id.in_(sub_ids)).delete(synchronize_session=False)
+    db.query(TaskFeedbackModel).filter(TaskFeedbackModel.task_id == task_id).delete(synchronize_session=False)
+    db.query(TaskSubmissionModel).filter(TaskSubmissionModel.task_id == task_id).delete(synchronize_session=False)
+    db.execute(task_assignments.delete().where(task_assignments.c.task_id == task_id))
+    db.delete(task)
+    db.commit()
 
 
 @router.get("/{task_id}/feedbacks", response_model=List[TaskFeedbackRead])

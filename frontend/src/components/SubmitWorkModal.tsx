@@ -16,6 +16,7 @@
  */
 
 import React, { useRef, useState, useCallback, DragEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
     X,
@@ -74,6 +75,7 @@ function formatBytes(bytes: number): string {
 // ── component ─────────────────────────────────────────────────────────────────
 
 const SubmitWorkModal: React.FC<Props> = ({ task, projectBrief, onClose, onSuccess }) => {
+    const navigate = useNavigate();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // ── form state ──────────────────────────────────────────────────────────
@@ -215,6 +217,11 @@ const SubmitWorkModal: React.FC<Props> = ({ task, projectBrief, onClose, onSucce
 
             // Refresh task list in background so status updates
             onSuccess();
+            
+            // Navigate to review page after 1.5s so user sees the "Success" animation
+            setTimeout(() => {
+                navigate(`/worker/tasks/${task.id}/review/${result.id}`);
+            }, 1500);
 
 
         } catch (submitErr: unknown) {

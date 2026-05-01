@@ -25,6 +25,7 @@ import {
     Zap,
     Star,
     ChevronDown,
+    Trash2,
 } from 'lucide-react';
 import SubmitWorkModal from '../../components/SubmitWorkModal';
 import AIAnalysisCard from '../../components/AIAnalysisCard';
@@ -270,6 +271,28 @@ const ProjectDetail: React.FC = () => {
         }
     };
 
+    const handleDeleteTask = async (task: Task) => {
+        if (!window.confirm(`Delete task "${task.title}"? This cannot be undone.`)) return;
+        try {
+            await projectsService.deleteTask(task.id);
+            setTasks(prev => prev.filter(t => t.id !== task.id));
+            setTaskDetail(null);
+        } catch (err: any) {
+            alert(err?.response?.data?.detail || 'Failed to delete task.');
+        }
+    };
+
+    const handleDeleteProject = async () => {
+        if (!project) return;
+        if (!window.confirm(`Delete project "${project.name}" and all its tasks? This cannot be undone.`)) return;
+        try {
+            await projectsService.deleteProject(project.id);
+            navigate(-1);
+        } catch (err: any) {
+            alert(err?.response?.data?.detail || 'Failed to delete project.');
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950">
@@ -318,13 +341,22 @@ const ProjectDetail: React.FC = () => {
                                 </div>
                             </div>
                             {(isManager || isAdmin) && (
-                                <button
-                                    onClick={() => setShowTaskModal(true)}
-                                    className="bg-primary text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all flex items-center gap-2 group"
-                                >
-                                    <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
-                                    <span>New Task Assignment</span>
-                                </button>
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={handleDeleteProject}
+                                        className="p-3.5 rounded-2xl border border-red-200 dark:border-red-900/40 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                                        title="Delete project"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => setShowTaskModal(true)}
+                                        className="bg-primary text-white px-6 py-3.5 rounded-2xl font-bold shadow-xl shadow-primary/20 hover:shadow-primary/40 hover:-translate-y-0.5 transition-all flex items-center gap-2 group"
+                                    >
+                                        <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                                        <span>New Task Assignment</span>
+                                    </button>
+                                </div>
                             )}
                             {isClient && ['draft', 'in_progress', 'interrupted'].includes(project.brief_status) && (
                                 <button
@@ -345,44 +377,6 @@ const ProjectDetail: React.FC = () => {
                 <div className="grid grid-cols-1 xl:grid-cols-4 gap-10">
                     {/* Sidebar Project Stats & Deadlines */}
                     <div className="xl:col-span-1 space-y-8">
-                        <section className="bg-white dark:bg-gray-900 rounded-3xl p-8 border border-gray-100 dark:border-gray-800 shadow-sm">
-                            <h3 className="text-xs font-black text-gray-400 dark:text-gray-500 uppercase tracking-[0.2em] mb-8 flex items-center gap-2">
-                                <Activity size={14} className="text-primary dark:text-primary" /> Key Information
-                            </h3>
-                            <div className="space-y-8">
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                                        <Calendar size={24} />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">Project Deadline</p>
-                                        <p className="font-bold text-gray-800 dark:text-gray-200">{project.deadline ? new Date(project.deadline).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : 'Flexible'}</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-                                        <CheckCircle2 size={24} />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-gray-400 dark:text-gray-500 font-bold uppercase mb-1">
-                                            {isClient ? 'Delivered' : 'Tasks Completed'}
-                                        </p>
-                                        <p className="font-bold text-gray-800 dark:text-gray-200">
-                                            {isClient
-                                                ? `${tasks.filter(t => t.delivery_state && t.delivery_state !== 'not_delivered').length} item(s)`
-                                                : `${stats.completed} / ${stats.total}`}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="mt-10 pt-8 border-t border-gray-50 dark:border-gray-800">
-                                <div className="flex items-center justify-between mb-4">
-                                    <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Brief Clarity Review</span>
-                                    <span className="text-xs font-bold text-green-500 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded">High Clarity</span>
-                                </div>
-                                <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-relaxed font-medium">The brief was generated with AI analysis and passed manager review.</p>
-                            </div>
-                        </section>
 
                         {(isManager || isAdmin) && (
                             <section className="bg-gray-900 dark:bg-gray-950 rounded-3xl p-8 text-white shadow-2xl relative overflow-hidden group border border-gray-800">
@@ -607,6 +601,15 @@ const ProjectDetail: React.FC = () => {
                                                 title="Select for Watermark Delivery"
                                             >
                                                 Deliver
+                                            </button>
+                                        )}
+                                        {(isManager || isAdmin) && (
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteTask(task); }}
+                                                className="p-2 text-gray-300 dark:text-gray-600 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                                title="Delete task"
+                                            >
+                                                <Trash2 size={16} />
                                             </button>
                                         )}
                                         <button className="p-2 text-gray-300 dark:text-gray-600 group-hover:text-primary transition-colors">
@@ -861,13 +864,22 @@ const ProjectDetail: React.FC = () => {
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
                                 {(isManager || isAdmin) && (
-                                    <button
-                                        onClick={() => setEditMode(m => !m)}
-                                        className={`p-2 rounded-xl transition-colors ${editMode ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:text-primary hover:bg-primary/5'}`}
-                                        title={editMode ? 'Cancel edit' : 'Edit task'}
-                                    >
-                                        <Edit2 size={16} />
-                                    </button>
+                                    <>
+                                        <button
+                                            onClick={() => setEditMode(m => !m)}
+                                            className={`p-2 rounded-xl transition-colors ${editMode ? 'bg-primary/10 text-primary' : 'text-gray-400 hover:text-primary hover:bg-primary/5'}`}
+                                            title={editMode ? 'Cancel edit' : 'Edit task'}
+                                        >
+                                            <Edit2 size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteTask(taskDetail.task)}
+                                            className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                            title="Delete task"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </>
                                 )}
                                 <button onClick={() => { setTaskDetail(null); setEditMode(false); }} className="p-2 rounded-xl text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
                                     <X size={18} />

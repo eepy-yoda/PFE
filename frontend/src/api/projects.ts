@@ -2,6 +2,16 @@ import { api } from './auth';
 import { supabase } from '../lib/supabaseClient';
 import type { Project, Task, TaskSubmission, TaskFeedback } from '../types';
 
+export interface WorkerProject {
+    id: string;
+    name: string;
+    status: string;
+    deadline?: string;
+    created_at: string;
+    task_count: number;
+    assigned_task_count: number;
+}
+
 export interface WorkerStat {
     user_id: string;
     full_name: string;
@@ -134,6 +144,11 @@ export const projectsService = {
         return response.data;
     },
 
+    async getTaskById(id: string): Promise<Task> {
+        const response = await api.get<Task>(`/tasks/${id}`);
+        return response.data;
+    },
+
     async createTask(taskData: Partial<Task>): Promise<Task> {
         const response = await api.post<Task>('/tasks/', taskData);
         return response.data;
@@ -217,9 +232,8 @@ export const projectsService = {
         return publicBucketUrl;
     },
 
-    /** Returns all projects the current employee is associated with (via tasks or direct assignment). */
-    async getWorkerProjects(): Promise<Project[]> {
-        const response = await api.get<Project[]>('/projects/');
+    async getWorkerProjects(): Promise<WorkerProject[]> {
+        const response = await api.get<WorkerProject[]>('/projects/worker-projects/');
         return response.data;
     },
 
@@ -251,6 +265,14 @@ export const projectsService = {
     async getManagerDashboard(): Promise<ManagerDashboardData> {
         const response = await api.get<ManagerDashboardData>('/projects/manager-dashboard');
         return response.data;
+    },
+
+    async deleteTask(id: string): Promise<void> {
+        await api.delete(`/tasks/${id}`);
+    },
+
+    async deleteProject(id: string): Promise<void> {
+        await api.delete(`/projects/${id}`);
     },
 };
 

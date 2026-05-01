@@ -40,6 +40,15 @@ export const submissionsApi = {
   },
 
   /**
+   * Get a single submission by ID.
+   * Backend: GET /api/v1/submissions/single/{submissionId}
+   */
+  async getById(submissionId: string): Promise<TaskSubmission> {
+    const response = await api.get<TaskSubmission>(`/submissions/single/${submissionId}`);
+    return response.data;
+  },
+
+  /**
    * Upload a single image file to Supabase Storage.
    * Returns the public URL of the uploaded file.
    * Uses XHR for per-file upload progress tracking.

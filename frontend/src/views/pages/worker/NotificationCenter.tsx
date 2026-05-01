@@ -75,7 +75,14 @@ const NotificationCenter: React.FC = () => {
 
     const handleNotificationClick = async (notif: Notification) => {
         if (notif.status === 'unread') await handleMarkRead(notif.id);
-        if (notif.task_id) navigate(`/worker/tasks/${notif.task_id}`);
+        
+        if (notif.task_id) {
+            if (['revision_requested', 'ai_score_low'].includes(notif.type)) {
+                navigate(`/worker/tasks/${notif.task_id}/review`);
+            } else {
+                navigate(`/worker/tasks/${notif.task_id}`);
+            }
+        }
         else if (notif.project_id) navigate(`/project/${notif.project_id}`);
     };
 

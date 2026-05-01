@@ -270,28 +270,6 @@ export interface Notification {
     read_at?: string;
 }
 
-// ── Time Tracking ────────────────────────────────────────────────────────────
-
-export interface TimeLog {
-    id: string;
-    task_id: string;
-    user_id: string;
-    start_time: string;
-    end_time?: string;
-    duration_seconds?: number;
-    description?: string;
-    is_manual: boolean;
-    created_at: string;
-    task_title?: string;
-    project_name?: string;
-}
-
-export interface TimeSummary {
-    today_seconds: number;
-    week_seconds: number;
-    active_timer?: TimeLog;
-}
-
 // ── Worker Dashboard ─────────────────────────────────────────────────────────
 
 export interface WorkerTaskSummaryItem {
@@ -325,9 +303,6 @@ export interface WorkerDashboardSummary {
     priority_tasks: WorkerTaskSummaryItem[];
     recent_feedback: WorkerFeedbackSummaryItem[];
     upcoming_deadlines: WorkerTaskSummaryItem[];
-    time_today_seconds: number;
-    time_week_seconds: number;
-    active_timer_task_id?: string;
 }
 
 // ── Activity Event ────────────────────────────────────────────────────────────

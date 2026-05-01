@@ -46,6 +46,18 @@ class ProjectRead(ProjectBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class WorkerProjectRead(BaseModel):
+    id: UUID
+    name: str
+    status: ProjectStatus
+    deadline: Optional[datetime] = None
+    created_at: datetime
+    task_count: int
+    assigned_task_count: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ── Manager Dashboard Schemas ─────────────────────────────────────────────────
 
 class WorkerStat(BaseModel):

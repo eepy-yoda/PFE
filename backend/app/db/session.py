@@ -29,11 +29,11 @@ else:
     engine = create_engine(
         settings.DATABASE_URL,
         connect_args=connect_args,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=10,
+        max_overflow=20,
         pool_pre_ping=True,
-        pool_timeout=15,       # give up waiting for a pool slot after 15s
-        pool_recycle=300,      # recycle connections every 5 min to avoid Supabase idle timeouts
+        pool_timeout=30,       # give up waiting for a pool slot after 30s
+        pool_recycle=180,      # recycle connections every 3 min to avoid Supabase idle timeouts
     )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

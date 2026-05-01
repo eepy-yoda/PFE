@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
     CheckCircle2, Clock, AlertTriangle, RotateCcw, Send,
     ArrowRight, TrendingUp, Calendar, MessageSquare,
-    RefreshCw, Zap, Upload, Timer,
+    RefreshCw, Zap, Upload,
 } from 'lucide-react';
 import WorkerNav from '../../components/worker/WorkerNav';
 import { workerApi } from '../../../api/worker';
@@ -305,11 +305,9 @@ const WorkerDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Bottom Row: Completion Rate + Runtime */}
+                {/* Bottom Row: Completion Rate */}
                 {!loading && (
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-
-                        {/* Completion Rate */}
+                    <div className="mt-6">
                         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-sm">
@@ -331,41 +329,6 @@ const WorkerDashboard: React.FC = () => {
                                 {stats.overdue > 0 && <span className="text-red-500">{stats.overdue} overdue</span>}
                             </div>
                         </div>
-
-                        {/* Runtime */}
-                        <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-5">
-                            <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 text-sm mb-4">
-                                <Timer size={15} className="text-indigo-500" /> Dashboard Runtime
-                            </h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4 text-center">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-indigo-400 mb-1">Today</p>
-                                    <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
-                                        {summary?.time_today_seconds
-                                            ? `${Math.floor(summary.time_today_seconds / 3600)}h ${Math.floor((summary.time_today_seconds % 3600) / 60)}m`
-                                            : '0h 0m'}
-                                    </p>
-                                </div>
-                                <div className="bg-violet-50 dark:bg-violet-900/20 rounded-xl p-4 text-center">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-violet-400 mb-1">This Week</p>
-                                    <p className="text-2xl font-black text-violet-600 dark:text-violet-400">
-                                        {summary?.time_week_seconds
-                                            ? `${Math.floor(summary.time_week_seconds / 3600)}h ${Math.floor((summary.time_week_seconds % 3600) / 60)}m`
-                                            : '0h 0m'}
-                                    </p>
-                                </div>
-                            </div>
-                            {summary?.active_timer_task_id && (
-                                <div
-                                    onClick={() => navigate(`/worker/tasks/${summary.active_timer_task_id}`)}
-                                    className="mt-3 flex items-center gap-2 text-[11px] text-green-600 dark:text-green-400 font-semibold cursor-pointer hover:underline"
-                                >
-                                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                                    Timer running — click to view task
-                                </div>
-                            )}
-                        </div>
-
                     </div>
                 )}
 
