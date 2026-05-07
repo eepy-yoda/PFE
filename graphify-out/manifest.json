@@ -1,0 +1,526 @@
+{
+  "D:\\pfe\\pfe clean\\PFE\\figma-design-plugin.js": {
+    "mtime": 1774559683.8715415,
+    "hash": "39cd45611c1fc5f2f599431f2c67720f"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\alembic\\env.py": {
+    "mtime": 1774558252.1586082,
+    "hash": "4fd5b4bc6a108cd9520f3a7a2544c378"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\alembic\\versions\\001_brief_resume_fields.py": {
+    "mtime": 1774558252.160606,
+    "hash": "ed0e333916c42e66d48bc0b705ba20aa"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\alembic\\versions\\002_password_reset_tokens.py": {
+    "mtime": 1776103174.3213227,
+    "hash": "a41a626ca9a6a81e93a337bf2d2dd666"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\alembic\\versions\\003_supabase_migration.py": {
+    "mtime": 1776104984.3590972,
+    "hash": "4ea4698fd617eb1b2fc2b203548bbb76"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\main.py": {
+    "mtime": 1777643967.9258313,
+    "hash": "6d99194ba9e47bc91308409967d484f3"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\__init__.py": {
+    "mtime": 1771433106.1940835,
+    "hash": "eed3190e2128da9ed61b9ed065462396"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\deps.py": {
+    "mtime": 1776471621.307686,
+    "hash": "9aa24b29e81994cb37219b5b14194771"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\__init__.py": {
+    "mtime": 1771433106.197667,
+    "hash": "eed3190e2128da9ed61b9ed065462396"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\auth.py": {
+    "mtime": 1776694303.3292482,
+    "hash": "6588796d848bbc14879c9d94c304152d"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\brief.py": {
+    "mtime": 1777397297.4613256,
+    "hash": "f113f73a6b21d24059bb989ef3de27e1"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\image_callbacks.py": {
+    "mtime": 1776694612.7450612,
+    "hash": "662921e5eaaee619dae500ec1d9e2521"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\management.py": {
+    "mtime": 1776694450.4063082,
+    "hash": "38c7ec72dcf69a8ee8afc26b09d18211"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\notifications.py": {
+    "mtime": 1772767123.1121998,
+    "hash": "0866d34290199c51d5ac6571ceda9189"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\projects.py": {
+    "mtime": 1777647824.0487745,
+    "hash": "4c863ad52c36191597f0636e9fc54242"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\submissions.py": {
+    "mtime": 1777651388.7546887,
+    "hash": "e5e691c73a0a7cff5b1c509a27b8aeea"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\tasks.py": {
+    "mtime": 1777650685.793316,
+    "hash": "f06862547ae944e638e74fa86d07739c"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\users.py": {
+    "mtime": 1776703420.536637,
+    "hash": "1bad2566dc07bf846b67a65a0882efba"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\api\\routes\\__init__.py": {
+    "mtime": 1771433106.200609,
+    "hash": "eed3190e2128da9ed61b9ed065462396"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\core\\config.py": {
+    "mtime": 1776104758.217387,
+    "hash": "6ab593243edd1697d9f87b213abbc961"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\core\\security.py": {
+    "mtime": 1776703920.682885,
+    "hash": "b75188be8f07514c89186135f243ae3d"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\core\\__init__.py": {
+    "mtime": 1771433106.2092052,
+    "hash": "eed3190e2128da9ed61b9ed065462396"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\db\\session.py": {
+    "mtime": 1777649507.2201624,
+    "hash": "8bb3e8b94bb4910736206573be056c9b"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\db\\__init__.py": {
+    "mtime": 1771433106.214238,
+    "hash": "eed3190e2128da9ed61b9ed065462396"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\models\\activity.py": {
+    "mtime": 1777650762.4702551,
+    "hash": "b36ea96ec2ea513e6658c590f60ddedd"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\models\\notification.py": {
+    "mtime": 1772766988.7487316,
+    "hash": "bc526c6e3d8ac597824261cc9054a700"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\models\\project.py": {
+    "mtime": 1777649495.5508041,
+    "hash": "e558927ffd0a62cabb9182d9820fcbfd"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\models\\rbac.py": {
+    "mtime": 1773181799.417566,
+    "hash": "d80ba4225b5415381f9fdada870740a0"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\models\\task.py": {
+    "mtime": 1777650756.2712698,
+    "hash": "1c7c2e6787775ebf15a4f20098c33b63"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\models\\user.py": {
+    "mtime": 1776694456.9775622,
+    "hash": "2999aca50d2c1c554c1e149c35aad081"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\models\\workflow_image_callback.py": {
+    "mtime": 1775058851.0085044,
+    "hash": "edf9d3295f0131355e1404bc50f8df1f"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\models\\__init__.py": {
+    "mtime": 1771433106.219669,
+    "hash": "eed3190e2128da9ed61b9ed065462396"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\activity.py": {
+    "mtime": 1773181855.1722016,
+    "hash": "496ba02cd62899e5f2fa4e0d44598e68"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\auth.py": {
+    "mtime": 1776104856.9174936,
+    "hash": "20cd0a92364784b97c701ed0a4aaa32d"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\brief.py": {
+    "mtime": 1774558252.1736205,
+    "hash": "c818235062c2f579a83b1ddd908c4195"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\image_callback.py": {
+    "mtime": 1775065452.7606654,
+    "hash": "4b6cc2a0b08172b5945374088de761bf"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\notification.py": {
+    "mtime": 1772767048.8626094,
+    "hash": "c2a5bd4ce3db10e67d2339b8b50ee56b"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\project.py": {
+    "mtime": 1777645651.4003797,
+    "hash": "e7cd97304dce7216bc34c23477732f38"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\rbac.py": {
+    "mtime": 1773181849.3406012,
+    "hash": "9be3730640123faf9288676486577b20"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\submission.py": {
+    "mtime": 1775066118.8312829,
+    "hash": "198a41b1e1e5a2a501911aaa1a42a700"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\task.py": {
+    "mtime": 1777649956.6265438,
+    "hash": "6a63a7f6ce840de4dee01e066fe2ad4a"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\user.py": {
+    "mtime": 1773693503.1373053,
+    "hash": "dd852d37cf22881466062a2603c0dc8e"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\schemas\\__init__.py": {
+    "mtime": 1771433106.2256765,
+    "hash": "eed3190e2128da9ed61b9ed065462396"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\activity_service.py": {
+    "mtime": 1773181898.336745,
+    "hash": "879148b5a0e8d24e0930dd14c3361949"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\auth_service.py": {
+    "mtime": 1776471571.7309864,
+    "hash": "78f68951a99a648c5ff4ca123ad5036c"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\delivery_service.py": {
+    "mtime": 1776708229.1749935,
+    "hash": "12ccd867ac3cb758248102f6adec2d05"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\email_service.py": {
+    "mtime": 1776694671.285537,
+    "hash": "8d2496aef805479c02bf3dd5a74e99ab"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\image_callback_service.py": {
+    "mtime": 1776708363.6749623,
+    "hash": "226d1e59f6abe3baaa8f487e03009fce"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\notification_service.py": {
+    "mtime": 1776694653.9345887,
+    "hash": "dd0f7ee515cd7930882e6d2e053b5e6c"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\project_service.py": {
+    "mtime": 1776694617.8649993,
+    "hash": "d84b196259ed8e7ad076c96d14a592ce"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\rbac_service.py": {
+    "mtime": 1773181891.4309573,
+    "hash": "91eb2ccbf0da1e67f84e340cdfb63ceb"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\storage_service.py": {
+    "mtime": 1776708381.45513,
+    "hash": "fc3fd84dd8137c889439df1168689439"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\submission_service.py": {
+    "mtime": 1777651397.6749876,
+    "hash": "52b460800ddb88b0e3b33c483baa23c8"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\supabase_client.py": {
+    "mtime": 1776104735.013987,
+    "hash": "a5de859689dff2ab2231fac03da1b7a6"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\task_service.py": {
+    "mtime": 1776711821.9553418,
+    "hash": "503192500cfb055c2f78617e17d73ee4"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\user_service.py": {
+    "mtime": 1776703938.6453633,
+    "hash": "eaf5dd512e3959bcd6f29fbfdc1d019e"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\app\\services\\__init__.py": {
+    "mtime": 1771433106.232095,
+    "hash": "eed3190e2128da9ed61b9ed065462396"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\migrations\\drop_task_dependencies.sql": {
+    "mtime": 1775495782.2330163,
+    "hash": "74677c96440748bdc208056a8b8725f3"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\scratch\\test_webhook.py": {
+    "mtime": 1777647776.5403943,
+    "hash": "90f1a56b957501a749c909aecca638aa"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\figma-design-plugiin.js\\code.js": {
+    "mtime": 1774631959.987712,
+    "hash": "03abbed672227d5828abe840ab4fb507"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\figma-design-plugiin.js\\code.ts": {
+    "mtime": 1774631908.8680935,
+    "hash": "6764b5cd6d128c239220c03f64a8f983"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\figma-design-plugiin.js\\eslint.config.js": {
+    "mtime": 1774631908.8690917,
+    "hash": "30e89400f2be56dc5f2b308e7cfc5de0"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\eslint.config.js": {
+    "mtime": 1771433106.2553065,
+    "hash": "c15fd0f45c689a8b77c8ff6fe6fada9b"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\vite.config.js": {
+    "mtime": 1774868236.9346173,
+    "hash": "2438e22076957bfbb3dc33f52d41a169"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\App.tsx": {
+    "mtime": 1777651481.7500012,
+    "hash": "a3d42914036e7075641bae28b79b4975"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\main.tsx": {
+    "mtime": 1772071812.6949322,
+    "hash": "737db62c1d193500a0f8185448afbbcd"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\vite-env.d.ts": {
+    "mtime": 1772072667.8182993,
+    "hash": "0ee723b752acec25218c4f11a3dd5327"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\api\\auth.ts": {
+    "mtime": 1777643230.9893758,
+    "hash": "81a882321bbd57133c149333ab40f93b"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\api\\brief.ts": {
+    "mtime": 1777395584.7018733,
+    "hash": "641158fbdf08565e70be67dd4d2c5584"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\api\\management.ts": {
+    "mtime": 1776471540.3735542,
+    "hash": "704a8f9d48ce2acc9b133ad1c00455ee"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\api\\notifications.ts": {
+    "mtime": 1772829309.3926616,
+    "hash": "8e5988cd9b5c729d56d2baa3bb569544"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\api\\projects.ts": {
+    "mtime": 1777650734.1315508,
+    "hash": "b16d11967c1b3d81dc70ee1e815a287d"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\api\\submissions.ts": {
+    "mtime": 1777651406.4581785,
+    "hash": "d2bd000d99d9f4657279c8be57d7925b"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\api\\users.ts": {
+    "mtime": 1776708958.61091,
+    "hash": "9f486cf16e4417dd32020c6d202ccf71"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\api\\worker.ts": {
+    "mtime": 1776709522.9484553,
+    "hash": "3092afbfc9a5808ca1c41ffb83381e57"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\components\\AIAnalysisCard.tsx": {
+    "mtime": 1774911498.354543,
+    "hash": "2f3c54494ec4fd12421bae5117984721"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\components\\SubmitWorkModal.tsx": {
+    "mtime": 1777651435.0298443,
+    "hash": "ace637d89a23cfe04edd06ba2975b1ba"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\context\\ThemeContext.tsx": {
+    "mtime": 1772071812.6919718,
+    "hash": "9d86a52fc0c13cf32e0626f011ad6603"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\lib\\supabaseClient.js": {
+    "mtime": 1771440703.3094218,
+    "hash": "cdff84f97404b1a2b25e85b294378746"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\lib\\supabaseClient.ts": {
+    "mtime": 1772071812.6929557,
+    "hash": "c20123dd9114049a9e2bfbe50c9476bb"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\lib\\utils.js": {
+    "mtime": 1771433106.270372,
+    "hash": "511a363b4aaae4cafae231b5b8458f17"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\lib\\utils.ts": {
+    "mtime": 1772071812.6939237,
+    "hash": "8d59da3a4e9395adec3423a359b64fea"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\types\\index.ts": {
+    "mtime": 1777643853.4959438,
+    "hash": "432a15161fbc6925dafdfcd8699c9b9c"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\viewmodels\\useDashboardViewModel.ts": {
+    "mtime": 1773867028.0606282,
+    "hash": "30165bf87ce87f1002379001cfaefd7b"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\viewmodels\\useLoginViewModel.ts": {
+    "mtime": 1777397579.151888,
+    "hash": "647be4edde174c7f88ff5790657e3e47"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\viewmodels\\useSignupViewModel.ts": {
+    "mtime": 1775486164.2983706,
+    "hash": "ab30e1a7a6c9a26da2f73571b5b5d1ca"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\ProtectedRoute.tsx": {
+    "mtime": 1772071812.6985168,
+    "hash": "3d2b4a2471d226a7dd58896f0d3bf17d"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\layout\\Footer.tsx": {
+    "mtime": 1776698188.3741548,
+    "hash": "0b7a0d3b60a7ac443362441eb50c5881"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\layout\\Layout.tsx": {
+    "mtime": 1773178223.113537,
+    "hash": "72839badca2b316c8f39f2ffa1a98ff0"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\layout\\Navbar.tsx": {
+    "mtime": 1776698918.5614934,
+    "hash": "182332fc5b367500121707f2be7ece21"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\layout\\NotificationDrawer.tsx": {
+    "mtime": 1775496157.5278132,
+    "hash": "746d181c8837e608ced9ba41ddcca770"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\management\\LogViewer.tsx": {
+    "mtime": 1773182350.1174579,
+    "hash": "b4ff17b575cbdd361461e17a7c3f0df9"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\management\\ManagementBoard.tsx": {
+    "mtime": 1774558288.6402574,
+    "hash": "cf62af2ced3c744f666f2bef51681a7a"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\management\\RoleManagement.tsx": {
+    "mtime": 1773182333.2729561,
+    "hash": "5ea57528e81cd689d15d5a67000b2404"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\management\\TaskBoard.tsx": {
+    "mtime": 1774558288.6412673,
+    "hash": "73f00033056428fae78b54ba2a52f0fa"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\management\\WorkerManagement.tsx": {
+    "mtime": 1777643226.1897907,
+    "hash": "d979483f9518775d16cedfa610249895"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\components\\worker\\WorkerNav.tsx": {
+    "mtime": 1777645677.7894337,
+    "hash": "b29fe15e5bb054162c644f3895c93a25"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\AboutPage.tsx": {
+    "mtime": 1772071812.7014763,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\ClientHome.tsx": {
+    "mtime": 1776698487.77586,
+    "hash": "5efef7689bc0c2f2506397d9a6bf98ae"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\ConnectionTest.tsx": {
+    "mtime": 1772071812.7026606,
+    "hash": "69572b46f968287e5e11c4b573bf4edc"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\Dashboard.tsx": {
+    "mtime": 1773867015.7930822,
+    "hash": "6e8f5c8c5c9a0b0e31c16de55b8f569e"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\ForgotPassword.tsx": {
+    "mtime": 1776103238.2673514,
+    "hash": "6b4540d683b3b3bd307540f05c33453b"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\GuidedBrief.tsx": {
+    "mtime": 1777643230.9914923,
+    "hash": "961a84396961affd5ec5b4fd7577b496"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\Home.tsx": {
+    "mtime": 1776698365.5735962,
+    "hash": "c2b92f22c403b3c2beafb2285c303f3d"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\HowItWorks.tsx": {
+    "mtime": 1772071812.7046547,
+    "hash": "26d5f1fe08189b37b371d2572c1fea97"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\Login.tsx": {
+    "mtime": 1776699407.2629318,
+    "hash": "a420443fe685d9f3b01eace040c02622"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\Profile.tsx": {
+    "mtime": 1774558288.6442688,
+    "hash": "61986560430b4fcff20c71ec420c594d"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\ProjectDetail.tsx": {
+    "mtime": 1777647281.1262517,
+    "hash": "d220aae9f6b98b1b14d4bfde90b51309"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\ResetPassword.tsx": {
+    "mtime": 1776105020.9868753,
+    "hash": "207bbe7c83a7e3cb2e26aa68f1a88c6a"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\Signup.tsx": {
+    "mtime": 1777643226.194005,
+    "hash": "1108bf58a4500c7f70a882b92af18056"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\dashboard\\AdminDashboard.tsx": {
+    "mtime": 1774558288.648272,
+    "hash": "e083bf47f5cde9e2fb59b2126567fcf0"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\dashboard\\BriefReview.tsx": {
+    "mtime": 1777645120.976602,
+    "hash": "1f26b72f9a93f2d60224fb78952f73c9"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\dashboard\\ClientDashboard.tsx": {
+    "mtime": 1777398018.930497,
+    "hash": "a017baa8992459f5a8df15827c34904a"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\dashboard\\ManagerDashboard.tsx": {
+    "mtime": 1774558288.6532695,
+    "hash": "4c18522b48c3f6e5cd92b29cf3ee8a6b"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\dashboard\\WorkerDashboard.tsx": {
+    "mtime": 1777643835.6584346,
+    "hash": "a812d8612dc260cbb134430982a150dd"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\worker\\AIReviewPage.tsx": {
+    "mtime": 1777651523.5913188,
+    "hash": "d0c43c18e65c927d0318cfc4e3cd680c"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\worker\\FeedbackCenter.tsx": {
+    "mtime": 1776709789.4941492,
+    "hash": "27e3c98b48ce04e4db4a53557c275db6"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\worker\\MyTasksPage.tsx": {
+    "mtime": 1776709660.8826723,
+    "hash": "b9fe1022baf94ce8b12f8056e8464bab"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\worker\\NotificationCenter.tsx": {
+    "mtime": 1777651487.6086524,
+    "hash": "1ed20b288b05041d8f2326527ede4442"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\worker\\TaskWorkspace.tsx": {
+    "mtime": 1777651497.1091588,
+    "hash": "80acb52bf272484d77a5baa80166b01b"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\views\\pages\\worker\\WorkerProjectsPage.tsx": {
+    "mtime": 1777645701.8930652,
+    "hash": "d9cf65b7e2e78a940e85d96d7a0f9718"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\CLAUDE.md": {
+    "mtime": 1776470835.1736608,
+    "hash": "6c93628d68a84784a672727842b12c73"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\RUN_GUIDE.md": {
+    "mtime": 1772071812.6755178,
+    "hash": "761e051d6396d5690795a1750ef69455"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backend\\requirements.txt": {
+    "mtime": 1774558252.1806054,
+    "hash": "ef06f8e35d0696aa5ec4cecfdf73566d"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\figma-design-plugiin.js\\README.md": {
+    "mtime": 1774631908.8670864,
+    "hash": "5cdc4db8aa1ae2b838e4c2d57780491d"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\CONNECTION_TEST.md": {
+    "mtime": 1771433106.2543192,
+    "hash": "669cf70782ee7aaff56edf93a675b788"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\index.html": {
+    "mtime": 1772071812.6861005,
+    "hash": "b69d80a953ece4b85a1ac6176b1056a1"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\README.md": {
+    "mtime": 1771433106.2543192,
+    "hash": "a35031cdadd3d3add78fbf2beb5b4b0a"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\backlogf.pdf": {
+    "mtime": 1774467188.928923,
+    "hash": "5fd0228d148ed4bd70e4f154593650b1"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\public\\vite.svg": {
+    "mtime": 1771433106.259935,
+    "hash": "8e3a10e157f75ada21ab742c022d5430"
+  },
+  "D:\\pfe\\pfe clean\\PFE\\frontend\\src\\assets\\react.svg": {
+    "mtime": 1771433106.2634902,
+    "hash": "f0402b67b6ce880f65666bb49e841696"
+  }
+}
