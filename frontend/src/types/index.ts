@@ -108,6 +108,8 @@ export interface Project {
     deadline?: string;
     brief_content?: string;
     clarification_notes?: string;
+    ai_resume?: string;
+    reference_image?: string;
     payment_updated_at?: string;
     paid_at?: string;
     created_at: string;
@@ -116,7 +118,7 @@ export interface Project {
 
 // ── Tasks ────────────────────────────────────────────────────────────────────
 
-export type TaskStatus = 'todo' | 'in_progress' | 'submitted' | 'under_ai_review' | 'revision_requested' | 'approved' | 'completed' | 'late';
+export type TaskStatus = 'todo' | 'in_progress' | 'submitted' | 'under_ai_review' | 'revision_requested' | 'approved' | 'completed' | 'late' | 'client_rejected' | 'waiting_client_clarification';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 
 export interface Task {
@@ -186,7 +188,30 @@ export interface TaskSubmission {
     attempt_number: number;
     is_approved: boolean;
     reviewed_by?: string;
+    // Client rejection workflow
+    client_review_status: string;
+    client_feedback?: string;
+    client_feedback_at?: string;
+    manager_decision: string;
+    manager_note?: string;
     created_at: string;
+}
+
+export interface ClientRejectionSummary {
+    submission_id: string;
+    task_id: string;
+    task_title: string;
+    project_id: string;
+    project_name: string;
+    client_id: string;
+    client_name: string;
+    worker_id?: string;
+    worker_name?: string;
+    watermark_preview_url?: string;
+    client_feedback: string;
+    rejected_at?: string;
+    manager_decision: string;
+    client_review_status: string;
 }
 
 export interface TaskFeedback {
@@ -254,6 +279,7 @@ export type NotificationType =
     | 'revision_requested'
     | 'content_ready'
     | 'project_paid'
+    | 'client_work_rejected'
     | 'general';
 
 export interface Notification {

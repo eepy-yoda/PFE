@@ -146,6 +146,38 @@ def upload_deliverable(
     return storage_path, public_url
 
 
+def upload_brief_reference_image(
+    *,
+    file_bytes: bytes,
+    content_type: str,
+    project_id: str,
+) -> tuple[str, str]:
+    """
+    Upload an AI-generated reference image for a brief to Supabase Storage.
+
+    Storage path:
+        task-submissions/briefs/{project_id}/{uuid}.{ext}
+
+    Returns (storage_path, public_url).
+    Raises RuntimeError on failure.
+    """
+    ext = _ext_from_mime(content_type)
+    unique_name = f"{uuid.uuid4().hex}{ext}"
+    storage_path = f"briefs/{project_id}/{unique_name}"
+
+    supabase: Client = _get_client()
+    supabase.storage.from_(TASK_SUBMISSIONS_BUCKET).upload(
+        path=storage_path,
+        file=file_bytes,
+        file_options={
+            "content-type": content_type,
+            "upsert": "false",
+        },
+    )
+    public_url = supabase.storage.from_(TASK_SUBMISSIONS_BUCKET).get_public_url(storage_path)
+    return storage_path, public_url
+
+
 def delete_deliverable(storage_path: str) -> None:
     """
     Delete a deliverable from Supabase Storage.

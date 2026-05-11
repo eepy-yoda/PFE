@@ -7,7 +7,7 @@
 
 import { api } from './auth';
 import { supabase } from '../lib/supabaseClient';
-import type { TaskSubmission } from '../types';
+import type { TaskSubmission, ClientRejectionSummary } from '../types';
 
 export interface SubmissionCreatePayload {
   content?: string;
@@ -45,6 +45,54 @@ export const submissionsApi = {
    */
   async getById(submissionId: string): Promise<TaskSubmission> {
     const response = await api.get<TaskSubmission>(`/submissions/single/${submissionId}`);
+    return response.data;
+  },
+
+  /**
+   * Client rejects a watermarked preview with required feedback.
+   * Backend: POST /api/v1/submissions/{submissionId}/client-reject
+   */
+  async clientReject(submissionId: string, feedback: string): Promise<TaskSubmission> {
+    const response = await api.post<TaskSubmission>(
+      `/submissions/${submissionId}/client-reject`,
+      { feedback },
+    );
+    return response.data;
+  },
+
+  /**
+   * Client approves a watermarked preview.
+   * Backend: POST /api/v1/submissions/{submissionId}/client-approve
+   */
+  async clientApprove(submissionId: string): Promise<TaskSubmission> {
+    const response = await api.post<TaskSubmission>(
+      `/submissions/${submissionId}/client-approve`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Manager acts on a client rejection.
+   * Backend: POST /api/v1/submissions/{submissionId}/manager-review-rejection
+   */
+  async managerReviewRejection(
+    submissionId: string,
+    action: 'send_to_worker' | 'ask_client_clarification',
+    managerNote?: string,
+  ): Promise<TaskSubmission> {
+    const response = await api.post<TaskSubmission>(
+      `/submissions/${submissionId}/manager-review-rejection`,
+      { action, manager_note: managerNote },
+    );
+    return response.data;
+  },
+
+  /**
+   * Manager: list all pending client rejections.
+   * Backend: GET /api/v1/submissions/client-rejections
+   */
+  async getClientRejections(): Promise<ClientRejectionSummary[]> {
+    const response = await api.get<ClientRejectionSummary[]>('/submissions/client-rejections');
     return response.data;
   },
 

@@ -9,10 +9,15 @@ from app.db.session import get_db
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.models.user import User, UserRole
-from app.models.task import Task
-from app.models.project import Project
-from app.schemas.submission import SubmissionCreateRequest, SubmissionRead, WebhookCallbackPayload, WatermarkCallbackPayload
+from app.models.task import Task, TaskStatus, TaskSubmission, TaskFeedback
+from app.models.project import Project, DeliveryState, PaymentStatus
+from app.models.notification import NotificationType
+from app.schemas.submission import (
+    SubmissionCreateRequest, SubmissionRead, WebhookCallbackPayload, WatermarkCallbackPayload,
+    ClientRejectRequest, ManagerReviewRejectionRequest, ClientRejectionSummary,
+)
 from app.services.submission_service import submission_service
+from app.services.notification_service import notification_service
 
 router = APIRouter(prefix="/submissions", tags=["submissions"])
 
@@ -83,7 +88,6 @@ def list_submissions(
             raise HTTPException(status_code=403, detail="Access denied")
 
     if current_user.role == UserRole.client:
-        from app.models.project import DeliveryState
         project = db.query(Project).filter(Project.id == task.project_id).first()
         if not project or project.client_id != current_user.id:
             raise HTTPException(status_code=403, detail="Access denied")
@@ -92,7 +96,6 @@ def list_submissions(
 
     # Strip all internal AI/review data from client-facing responses
     if current_user.role == UserRole.client:
-        from app.models.project import DeliveryState
         delivery_state = getattr(task, 'delivery_state', None)
         is_final = delivery_state == DeliveryState.final_delivered
         is_watermark = delivery_state == DeliveryState.watermark_delivered
@@ -104,6 +107,9 @@ def list_submissions(
             sub.brief_snapshot = None
             sub.is_approved = False
             sub.reviewed_by = None
+            # manager_note visible to client only when clarification was requested
+            if getattr(sub, 'client_review_status', 'pending') != 'clarification_requested':
+                sub.manager_note = None
             if not is_final:
                 sub.file_paths = None
                 sub.links = None
@@ -144,7 +150,7 @@ def get_submission(
         project = db.query(Project).filter(Project.id == task.project_id).first()
         if not project or project.client_id != current_user.id:
             raise HTTPException(status_code=403, detail="Access denied")
-        
+
         # Strip internal fields for client
         submission.ai_score = None
         submission.ai_feedback = None
@@ -153,9 +159,11 @@ def get_submission(
         submission.brief_snapshot = None
         submission.is_approved = False
         submission.reviewed_by = None
-        
+        # manager_note only visible when clarification was requested (it's the clarification message)
+        if getattr(submission, 'client_review_status', 'pending') != 'clarification_requested':
+            submission.manager_note = None
+
         # Gate files based on delivery state
-        from app.models.project import DeliveryState
         delivery_state = getattr(task, 'delivery_state', None)
         if delivery_state != DeliveryState.final_delivered:
             submission.file_paths = None
@@ -164,6 +172,278 @@ def get_submission(
             submission.watermarked_file_paths = None
             submission.watermark_file_path = None
 
+    return submission
+
+
+@router.get("/client-rejections", response_model=List[ClientRejectionSummary])
+def list_client_rejections(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manager: list all client rejections that await a decision."""
+    _require_manager_or_above(current_user)
+
+    import json
+    from app.models.user import User as UserModel
+
+    submissions = (
+        db.query(TaskSubmission)
+        .filter(TaskSubmission.client_review_status == "rejected",
+                TaskSubmission.manager_decision == "pending")
+        .order_by(TaskSubmission.client_feedback_at.desc().nullslast())
+        .all()
+    )
+
+    result: List[ClientRejectionSummary] = []
+    for sub in submissions:
+        task = db.query(Task).filter(Task.id == sub.task_id).first()
+        if not task:
+            continue
+        project = db.query(Project).filter(Project.id == task.project_id).first()
+        if not project:
+            continue
+        client = db.query(UserModel).filter(UserModel.id == project.client_id).first()
+        worker = db.query(UserModel).filter(UserModel.id == task.assigned_to).first() if task.assigned_to else None
+
+        preview_url: Optional[str] = None
+        if sub.watermarked_file_paths:
+            try:
+                urls = json.loads(sub.watermarked_file_paths)
+                if urls:
+                    preview_url = urls[0]
+            except Exception:
+                pass
+
+        result.append(ClientRejectionSummary(
+            submission_id=sub.id,
+            task_id=task.id,
+            task_title=task.title,
+            project_id=project.id,
+            project_name=project.name,
+            client_id=project.client_id,
+            client_name=client.full_name if client else "Unknown",
+            worker_id=task.assigned_to,
+            worker_name=worker.full_name if worker else None,
+            watermark_preview_url=preview_url,
+            client_feedback=sub.client_feedback or "",
+            rejected_at=sub.client_feedback_at,
+            manager_decision=sub.manager_decision,
+            client_review_status=sub.client_review_status,
+        ))
+    return result
+
+
+@router.post("/{submission_id}/client-reject", response_model=SubmissionRead)
+def client_reject_submission(
+    submission_id: UUID,
+    body: ClientRejectRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Client rejects a watermarked preview and provides feedback."""
+    if current_user.role != UserRole.client:
+        raise HTTPException(status_code=403, detail="Client access required")
+
+    submission = db.query(TaskSubmission).filter(TaskSubmission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    task = db.query(Task).filter(Task.id == submission.task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    project = db.query(Project).filter(Project.id == task.project_id).first()
+    if not project or project.client_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if task.delivery_state != DeliveryState.watermark_delivered:
+        raise HTTPException(status_code=400, detail="Can only reject watermarked preview deliveries")
+
+    if project.payment_status == PaymentStatus.fully_paid:
+        raise HTTPException(status_code=400, detail="Final content already delivered")
+
+    if submission.client_review_status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Preview already reviewed (status: {submission.client_review_status})"
+        )
+
+    from datetime import datetime, timezone
+    submission.client_review_status = "rejected"
+    submission.client_feedback = body.feedback
+    submission.client_feedback_at = datetime.now(timezone.utc)
+    task.status = TaskStatus.client_rejected
+    db.commit()
+    db.refresh(submission)
+
+    if project.manager_id:
+        notification_service.create(
+            db,
+            user_id=project.manager_id,
+            title="Client rejected preview",
+            notification_type=NotificationType.client_work_rejected,
+            body=f"Client submitted feedback for \"{task.title}\".",
+            project_id=project.id,
+            task_id=task.id,
+        )
+
+    # Strip internal fields before returning to client
+    submission.ai_score = None
+    submission.ai_feedback = None
+    submission.webhook_response = None
+    submission.ai_analysis_result = None
+    submission.brief_snapshot = None
+    submission.is_approved = False
+    submission.reviewed_by = None
+    submission.manager_note = None
+    return submission
+
+
+@router.post("/{submission_id}/client-approve", response_model=SubmissionRead)
+def client_approve_submission(
+    submission_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Client approves a watermarked preview."""
+    if current_user.role != UserRole.client:
+        raise HTTPException(status_code=403, detail="Client access required")
+
+    submission = db.query(TaskSubmission).filter(TaskSubmission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    task = db.query(Task).filter(Task.id == submission.task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    project = db.query(Project).filter(Project.id == task.project_id).first()
+    if not project or project.client_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    if task.delivery_state != DeliveryState.watermark_delivered:
+        raise HTTPException(status_code=400, detail="Can only approve watermarked preview deliveries")
+
+    if submission.client_review_status != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Preview already reviewed (status: {submission.client_review_status})"
+        )
+
+    submission.client_review_status = "accepted"
+    db.commit()
+    db.refresh(submission)
+
+    if project.manager_id:
+        notification_service.create(
+            db,
+            user_id=project.manager_id,
+            title="Client approved preview",
+            notification_type=NotificationType.general,
+            body=f"Client approved the preview for \"{task.title}\". Awaiting final payment.",
+            project_id=project.id,
+            task_id=task.id,
+        )
+
+    submission.ai_score = None
+    submission.ai_feedback = None
+    submission.webhook_response = None
+    submission.ai_analysis_result = None
+    submission.brief_snapshot = None
+    submission.is_approved = False
+    submission.reviewed_by = None
+    submission.manager_note = None
+    return submission
+
+
+@router.post("/{submission_id}/manager-review-rejection", response_model=SubmissionRead)
+def manager_review_client_rejection(
+    submission_id: UUID,
+    body: ManagerReviewRejectionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Manager acts on a client rejection: forward to worker or ask client for clarification."""
+    _require_manager_or_above(current_user)
+
+    submission = db.query(TaskSubmission).filter(TaskSubmission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    if submission.client_review_status != "rejected":
+        raise HTTPException(status_code=400, detail="No pending client rejection for this submission")
+
+    if submission.manager_decision != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Already processed (decision: {submission.manager_decision})"
+        )
+
+    task = db.query(Task).filter(Task.id == submission.task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    project = db.query(Project).filter(Project.id == task.project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    if body.action == "send_to_worker":
+        manager_note_text = (body.manager_note or "").strip()
+        submission.manager_decision = "sent_to_worker"
+        if manager_note_text:
+            submission.manager_note = manager_note_text
+        task.status = TaskStatus.revision_requested
+
+        worker_message = submission.client_feedback or ""
+        if manager_note_text:
+            worker_message = f"{worker_message}\n\nManager note: {manager_note_text}"
+
+        worker_id = task.assigned_to
+        if worker_id:
+            feedback_entry = TaskFeedback(
+                task_id=task.id,
+                submission_id=submission.id,
+                sent_by=current_user.id,
+                sent_to=worker_id,
+                message=worker_message.strip(),
+                is_revision_request=True,
+            )
+            db.add(feedback_entry)
+            notification_service.create(
+                db,
+                user_id=worker_id,
+                title="Modification requested",
+                notification_type=NotificationType.revision_requested,
+                body=f"Manager forwarded client feedback for \"{task.title}\".",
+                project_id=project.id,
+                task_id=task.id,
+            )
+
+    elif body.action == "ask_client_clarification":
+        note = (body.manager_note or "").strip()
+        if len(note) < 10:
+            raise HTTPException(
+                status_code=422,
+                detail="Manager note required (min 10 characters) for clarification"
+            )
+        submission.manager_decision = "clarification_requested"
+        submission.manager_note = note
+        submission.client_review_status = "clarification_requested"
+        task.status = TaskStatus.waiting_client_clarification
+
+        if project.client_id:
+            notification_service.create(
+                db,
+                user_id=project.client_id,
+                title="Clarification requested",
+                notification_type=NotificationType.clarification_requested,
+                body=f"Manager needs more details about your feedback on \"{task.title}\".",
+                project_id=project.id,
+                task_id=task.id,
+            )
+
+    db.commit()
+    db.refresh(submission)
     return submission
 
 

@@ -22,26 +22,11 @@ const BriefReview: React.FC = () => {
         setGeneratingResume(true);
         try {
             const data = await projectsService.generateAIResume(project.id);
-            // Handle the updated array structure from n8n 
-            // e.g. [{ message: "...", imageBase64: { data: "...", mimeType: "..." } }]
-            if (Array.isArray(data) && data.length > 0) {
-                const responseData = data[0];
-                const msg = responseData.message || 'No message provided.';
-                
-                let imgData = undefined;
-                if (responseData.imageBase64) {
-                     if (responseData.imageBase64.data === "filesystem-v2" && responseData.imageBase64.directory) {
-                          // n8n binary data might be externalized, but here 'directory' contains the actual pollinations.ai URL!
-                          imgData = responseData.imageBase64.directory;
-                     } else if (responseData.imageBase64.data && responseData.imageBase64.data !== "filesystem-v2") {
-                          // Standard base64
-                          imgData = `data:${responseData.imageBase64.mimeType};base64,${responseData.imageBase64.data}`;
-                     }
-                }
-                setAiResume({ message: msg, image: imgData });
-            } else {
-                setAiResume({ message: JSON.stringify(data, null, 2) });
-            }
+            // Endpoint now returns {ai_resume, reference_image} after persisting to DB
+            setAiResume({
+                message: data.ai_resume || 'No resume generated.',
+                image: data.reference_image || undefined,
+            });
         } catch (err) {
             console.error("Failed to generate AI resume", err);
             alert("Failed to reach the AI service.");
@@ -59,6 +44,12 @@ const BriefReview: React.FC = () => {
                     managementService.getWorkers()
                 ]);
                 setProject(projData);
+                if (projData.ai_resume) {
+                    setAiResume({
+                        message: projData.ai_resume,
+                        image: projData.reference_image || undefined,
+                    });
+                }
                 // getWorkers already filters for employee/manager, but we can double check
                 setEmployees(allUsers.filter((u: CurrentUser) => u.role === 'employee'));
             } catch (err) {
@@ -303,10 +294,26 @@ const BriefReview: React.FC = () => {
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {aiResume.image && (
+                                {aiResume.image ? (
                                     <div className="rounded-2xl overflow-hidden border border-indigo-100/50 dark:border-indigo-800/30">
-                                        <img src={aiResume.image} alt="AI Generated Reference" className="w-full h-auto object-cover" />
+                                        <img
+                                            src={aiResume.image}
+                                            alt="AI Generated Reference"
+                                            className="w-full h-auto object-cover"
+                                            onError={(e) => {
+                                                (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                                const p = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                                if (p) p.style.display = 'block';
+                                            }}
+                                        />
+                                        <p className="hidden text-indigo-700/50 dark:text-indigo-500/50 text-xs font-medium italic p-3">
+                                            Reference image unavailable.
+                                        </p>
                                     </div>
+                                ) : (
+                                    <p className="text-indigo-700/50 dark:text-indigo-500/50 text-xs font-medium italic">
+                                        Reference image unavailable.
+                                    </p>
                                 )}
                                 <div className="p-4 bg-white/60 dark:bg-black/20 rounded-2xl border border-indigo-100/50 dark:border-indigo-800/30 text-sm text-indigo-900 dark:text-indigo-300 whitespace-pre-wrap leading-relaxed">
                                     {aiResume.message}

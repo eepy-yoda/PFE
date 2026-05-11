@@ -25,6 +25,7 @@ from app.core.config import settings
 from pydantic import BaseModel
 from sqlalchemy import func
 from datetime import timedelta
+import base64
 import logging
 import requests
 from app.services.delivery_service import delivery_service
@@ -569,33 +570,85 @@ def generate_ai_resume(
 
     payload = {
         "project_name": project.name,
-        "brief_content": project.brief_content
+        "brief_content": project.brief_content,
     }
 
     try:
-        response = requests.post(settings.N8N_AI_RESUME_WEBHOOK_URL, json=payload, timeout=45)
-        response.raise_for_status()
-        
-        # Check if response is empty
-        if not response.text:
-            logger.error("AI Resume Webhook returned an empty response")
+        resp = requests.post(settings.N8N_AI_RESUME_WEBHOOK_URL, json=payload, timeout=45)
+        resp.raise_for_status()
+
+        if not resp.text:
+            logger.error("AI Resume Webhook returned empty response for project %s", project_id)
             raise HTTPException(status_code=502, detail="AI service returned an empty response.")
-            
+
         try:
-            return response.json()
+            raw_data = resp.json()
         except ValueError:
-            logger.error("AI Resume Webhook returned non-JSON content: %s", response.text[:200])
+            logger.error("AI Resume Webhook returned non-JSON for project %s: %s", project_id, resp.text[:200])
             raise HTTPException(status_code=502, detail="AI service returned invalid data format.")
-            
+
     except requests.exceptions.Timeout:
-        logger.error("AI Resume Webhook timed out after 45s")
+        logger.error("AI Resume Webhook timed out (45s) for project %s", project_id)
         raise HTTPException(status_code=504, detail="AI service timed out.")
     except requests.exceptions.RequestException as e:
-        logger.error("AI Resume Webhook failed: %s", e)
-        # If it's an HTTP error, try to log the body
-        if hasattr(e, 'response') and e.response is not None:
-             logger.error("Error response body: %s", e.response.text[:500])
+        logger.error("AI Resume Webhook request failed for project %s: %s", project_id, e)
+        if hasattr(e, "response") and e.response is not None:
+            logger.error("Error response body: %s", e.response.text[:500])
         raise HTTPException(status_code=502, detail="Failed to reach the AI service.")
+
+    # Parse n8n response: expected [{message: "...", imageBase64: {data, mimeType, directory}}]
+    resume_text: Optional[str] = None
+    reference_image: Optional[str] = None
+
+    try:
+        if isinstance(raw_data, list) and raw_data:
+            item = raw_data[0]
+            resume_text = item.get("message") or ""
+            img_obj = item.get("imageBase64")
+            if img_obj:
+                img_data = img_obj.get("data")
+                img_mime = img_obj.get("mimeType") or "image/png"
+                img_dir = img_obj.get("directory")
+                if img_data == "filesystem-v2" and img_dir:
+                    # n8n externalized binary: directory field holds the public URL
+                    reference_image = img_dir
+                elif img_data and img_data != "filesystem-v2":
+                    # Real base64: upload to Supabase Storage
+                    try:
+                        from app.services import storage_service as ss
+                        file_bytes = base64.b64decode(img_data)
+                        _, public_url = ss.upload_brief_reference_image(
+                            file_bytes=file_bytes,
+                            content_type=img_mime,
+                            project_id=str(project.id),
+                        )
+                        reference_image = public_url
+                    except Exception as img_err:
+                        logger.error("Brief reference image upload failed for project %s: %s", project_id, img_err)
+        elif isinstance(raw_data, dict):
+            resume_text = raw_data.get("message") or raw_data.get("text") or ""
+    except Exception as parse_err:
+        logger.error("Failed to parse AI resume response for project %s: %s", project_id, parse_err)
+        resume_text = str(raw_data)
+
+    # Persist to project record
+    if resume_text is not None:
+        project.ai_resume = resume_text
+    if reference_image is not None:
+        project.reference_image = reference_image
+
+    try:
+        db.commit()
+        db.refresh(project)
+    except Exception as db_err:
+        db.rollback()
+        logger.error("Failed to persist AI resume for project %s: %s", project_id, db_err)
+        raise HTTPException(status_code=500, detail="AI resume generated but could not be saved.")
+
+    return {
+        "ai_resume": project.ai_resume,
+        "reference_image": project.reference_image,
+    }
 
 
 @router.post("/{project_id}/mark-paid", response_model=ProjectRead)

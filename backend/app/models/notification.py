@@ -17,6 +17,7 @@ class NotificationType(str, enum.Enum):
     revision_requested = "revision_requested"
     content_ready = "content_ready"
     project_paid = "project_paid"
+    client_work_rejected = "client_work_rejected"
     general = "general"
 
 

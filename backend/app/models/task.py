@@ -17,6 +17,8 @@ class TaskStatus(str, enum.Enum):
     approved = "approved"
     completed = "completed"
     late = "late"
+    client_rejected = "client_rejected"
+    waiting_client_clarification = "waiting_client_clarification"
 
 
 class SubmissionStatus(str, enum.Enum):
@@ -114,6 +116,15 @@ class TaskSubmission(Base):
     # Kept for backward compatibility — mirrors submission_status == validated
     is_approved = Column(Boolean, default=False)
     reviewed_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+
+    # ── Client rejection workflow ──────────────────────────────────────────────
+    # Values: pending | accepted | rejected | clarification_requested
+    client_review_status = Column(String, nullable=False, server_default="pending")
+    client_feedback = Column(Text, nullable=True)
+    client_feedback_at = Column(DateTime(timezone=True), nullable=True)
+    # Values: pending | sent_to_worker | clarification_requested | resolved
+    manager_decision = Column(String, nullable=False, server_default="pending")
+    manager_note = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

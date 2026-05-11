@@ -73,6 +73,43 @@ def _run_startup_db_tasks():
         ("workflow_image_callbacks.callback_token index",
          "CREATE UNIQUE INDEX IF NOT EXISTS ix_workflow_image_callbacks_token ON workflow_image_callbacks (callback_token)",
          False),
+        # ── Client rejection workflow columns ──────────────────────────────────
+        ("taskstatus enum: client_rejected",
+         "ALTER TYPE taskstatus ADD VALUE IF NOT EXISTS 'client_rejected'",
+         True),
+        ("taskstatus enum: waiting_client_clarification",
+         "ALTER TYPE taskstatus ADD VALUE IF NOT EXISTS 'waiting_client_clarification'",
+         True),
+        ("notificationtype enum: client_work_rejected",
+         "ALTER TYPE notificationtype ADD VALUE IF NOT EXISTS 'client_work_rejected'",
+         True),
+        ("task_submissions.client_review_status",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS client_review_status TEXT NOT NULL DEFAULT 'pending'",
+         False),
+        ("task_submissions.client_feedback",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS client_feedback TEXT",
+         False),
+        ("task_submissions.client_feedback_at",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS client_feedback_at TIMESTAMPTZ",
+         False),
+        ("task_submissions.manager_decision",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS manager_decision TEXT NOT NULL DEFAULT 'pending'",
+         False),
+        ("task_submissions.manager_note",
+         "ALTER TABLE task_submissions ADD COLUMN IF NOT EXISTS manager_note TEXT",
+         False),
+        ("idx task_submissions client_review_status",
+         "CREATE INDEX IF NOT EXISTS ix_task_submissions_client_review_status ON task_submissions (client_review_status)",
+         False),
+        ("idx task_submissions manager_decision",
+         "CREATE INDEX IF NOT EXISTS ix_task_submissions_manager_decision ON task_submissions (manager_decision)",
+         False),
+        ("projects.ai_resume",
+         "ALTER TABLE projects ADD COLUMN IF NOT EXISTS ai_resume TEXT",
+         False),
+        ("projects.reference_image",
+         "ALTER TABLE projects ADD COLUMN IF NOT EXISTS reference_image TEXT",
+         False),
     ]
     for label, sql, pg_only in migrations:
         try:
@@ -116,8 +153,8 @@ async def late_task_checker():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Run DB startup tasks in a thread so they never block the event loop
-    # loop.run_in_executor(None, _run_startup_db_tasks)
+    # Run DB startup tasks in a background thread so they don't block the event loop
+    await asyncio.to_thread(_run_startup_db_tasks)
 
     checker_task = asyncio.create_task(late_task_checker())
     yield

@@ -53,10 +53,67 @@ class SubmissionRead(BaseModel):
     attempt_number: int = 1
     is_approved: bool = False
     reviewed_by: Optional[UUID] = None
+    # Client rejection workflow fields
+    client_review_status: str = "pending"
+    client_feedback: Optional[str] = None
+    client_feedback_at: Optional[datetime] = None
+    manager_decision: str = "pending"
+    manager_note: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ── Client rejection request ───────────────────────────────────────────────────
+
+class ClientRejectRequest(BaseModel):
+    feedback: str
+
+    @field_validator("feedback")
+    @classmethod
+    def validate_feedback(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 10:
+            raise ValueError("Feedback must be at least 10 characters")
+        if len(v) > 2000:
+            raise ValueError("Feedback must not exceed 2000 characters")
+        return v
+
+
+# ── Manager review of client rejection ────────────────────────────────────────
+
+class ManagerReviewRejectionRequest(BaseModel):
+    action: str  # "send_to_worker" | "ask_client_clarification"
+    manager_note: Optional[str] = None
+
+    @field_validator("action")
+    @classmethod
+    def validate_action(cls, v: str) -> str:
+        if v not in {"send_to_worker", "ask_client_clarification"}:
+            raise ValueError("action must be 'send_to_worker' or 'ask_client_clarification'")
+        return v
+
+
+# ── Manager: enriched rejection summary ───────────────────────────────────────
+
+class ClientRejectionSummary(BaseModel):
+    submission_id: UUID
+    task_id: UUID
+    task_title: str
+    project_id: UUID
+    project_name: str
+    client_id: UUID
+    client_name: str
+    worker_id: Optional[UUID] = None
+    worker_name: Optional[str] = None
+    watermark_preview_url: Optional[str] = None
+    client_feedback: str
+    rejected_at: Optional[datetime] = None
+    manager_decision: str
+    client_review_status: str
+
+    model_config = ConfigDict(from_attributes=False)
 
 
 # ── Async webhook callback schema ──────────────────────────────────────────────

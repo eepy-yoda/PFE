@@ -12,14 +12,16 @@ import type { WorkerDashboardSummary } from '../../../types';
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 const STATUS_COLORS: Record<string, string> = {
-    todo:               'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
-    in_progress:        'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-    submitted:          'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
-    under_ai_review:    'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400',
-    revision_requested: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
-    approved:           'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-    completed:          'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-    late:               'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
+    todo:                          'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400',
+    in_progress:                   'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
+    submitted:                     'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400',
+    under_ai_review:               'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-400',
+    revision_requested:            'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
+    client_rejected:               'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400',
+    waiting_client_clarification:  'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    approved:                      'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+    completed:                     'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+    late:                          'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
 };
 
 const PRIORITY_COLORS: Record<string, string> = {

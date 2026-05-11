@@ -60,6 +60,8 @@ class Project(Base):
     saved_answers = Column(Text, nullable=True)   # per-field autosave: {fieldKey: {question, answer}}
     brief_content = Column(Text, nullable=True)
     clarification_notes = Column(Text, nullable=True)
+    ai_resume = Column(Text, nullable=True)
+    reference_image = Column(Text, nullable=True)  # public URL or storage path
 
     payment_type = Column(SQLEnum(PaymentType, name="paymenttype", create_type=True), default=PaymentType.project)
     payment_status = Column(SQLEnum(PaymentStatus, name="paymentstatus", create_type=True), default=PaymentStatus.unpaid)

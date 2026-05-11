@@ -31,6 +31,7 @@ import SubmitWorkModal from '../../components/SubmitWorkModal';
 import AIAnalysisCard from '../../components/AIAnalysisCard';
 import { AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabaseClient';
+import { submissionsApi } from '../../api/submissions';
 
 const ProjectDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -65,6 +66,13 @@ const ProjectDetail: React.FC = () => {
     // Client-safe deliverable viewer
     const [clientDeliverableModal, setClientDeliverableModal] = useState<{ task: Task; subs: TaskSubmission[] } | null>(null);
     const [clientDeliverableLoading, setClientDeliverableLoading] = useState(false);
+
+    // Client rejection modal
+    const [rejectModalOpen, setRejectModalOpen] = useState(false);
+    const [rejectFeedback, setRejectFeedback] = useState('');
+    const [rejectSubmitting, setRejectSubmitting] = useState(false);
+    const [rejectError, setRejectError] = useState<string | null>(null);
+    const [approveSubmitting, setApproveSubmitting] = useState(false);
 
     // Feedback modal (manager → employee)
     const [feedbackModal, setFeedbackModal] = useState<{ task: Task } | null>(null);
@@ -200,6 +208,48 @@ const ProjectDetail: React.FC = () => {
             setClientDeliverableModal({ task, subs: [] });
         } finally {
             setClientDeliverableLoading(false);
+        }
+    };
+
+    const handleClientReject = async () => {
+        if (!clientDeliverableModal) return;
+        const sub = clientDeliverableModal.subs[0];
+        if (!sub) return;
+        const trimmed = rejectFeedback.trim();
+        if (trimmed.length < 10) {
+            setRejectError('Feedback must be at least 10 characters.');
+            return;
+        }
+        setRejectSubmitting(true);
+        setRejectError(null);
+        try {
+            const updated = await submissionsApi.clientReject(sub.id, trimmed);
+            setClientDeliverableModal(prev =>
+                prev ? { ...prev, subs: prev.subs.map(s => s.id === updated.id ? updated : s) } : prev
+            );
+            setRejectModalOpen(false);
+            setRejectFeedback('');
+        } catch (err: any) {
+            setRejectError(err?.response?.data?.detail ?? 'Failed to submit feedback. Try again.');
+        } finally {
+            setRejectSubmitting(false);
+        }
+    };
+
+    const handleClientApprove = async () => {
+        if (!clientDeliverableModal) return;
+        const sub = clientDeliverableModal.subs[0];
+        if (!sub) return;
+        setApproveSubmitting(true);
+        try {
+            const updated = await submissionsApi.clientApprove(sub.id);
+            setClientDeliverableModal(prev =>
+                prev ? { ...prev, subs: prev.subs.map(s => s.id === updated.id ? updated : s) } : prev
+            );
+        } catch (err: any) {
+            alert(err?.response?.data?.detail ?? 'Failed to approve. Try again.');
+        } finally {
+            setApproveSubmitting(false);
         }
     };
 
@@ -568,9 +618,11 @@ const ProjectDetail: React.FC = () => {
                                                 ? 'bg-blue-100/50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
                                                 : task.status === 'submitted' || task.status === 'under_ai_review'
                                                     ? 'bg-indigo-100/50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
-                                                    : task.status === 'revision_requested'
+                                                    : task.status === 'revision_requested' || task.status === 'client_rejected'
                                                         ? 'bg-rose-100/50 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
-                                                        : 'bg-gray-100/50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                                                        : task.status === 'waiting_client_clarification'
+                                                            ? 'bg-amber-100/50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                                                            : 'bg-gray-100/50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
                                             }`}>
                                             {task.status.replace(/_/g, ' ')}
                                         </span>
@@ -916,7 +968,7 @@ const ProjectDetail: React.FC = () => {
                                                 value={editForm.status}
                                                 onChange={e => setEditForm(f => ({ ...f, status: e.target.value }))}
                                             >
-                                                {['todo','in_progress','submitted','under_ai_review','revision_requested','approved','completed','late'].map(s => (
+                                                {['todo','in_progress','submitted','under_ai_review','revision_requested','approved','completed','late','client_rejected','waiting_client_clarification'].map(s => (
                                                     <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
                                                 ))}
                                             </select>
@@ -1208,7 +1260,19 @@ const ProjectDetail: React.FC = () => {
                                     <p className="text-gray-400 dark:text-gray-500 font-bold">No files available yet.</p>
                                 </div>
                             ) : (() => {
-                                const sub = clientDeliverableModal.subs[0]; // subs are newest-first; watermark is on the latest approved submission
+                                const sub = clientDeliverableModal.subs[0];
+                                const isWatermark = clientDeliverableModal.task.delivery_state === 'watermark_delivered';
+                                const isFinal = clientDeliverableModal.task.delivery_state === 'final_delivered';
+                                const reviewStatus = sub.client_review_status ?? 'pending';
+                                const alreadyReviewed = reviewStatus !== 'pending';
+
+                                const reviewStatusLabel: Record<string, { label: string; color: string }> = {
+                                    pending:                  { label: 'Awaiting your review', color: 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800' },
+                                    rejected:                 { label: 'Feedback submitted — waiting for manager review', color: 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800' },
+                                    clarification_requested:  { label: 'Manager requested clarification', color: 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800' },
+                                    accepted:                 { label: 'Preview approved — awaiting final payment', color: 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800' },
+                                };
+
                                 return (
                                     <div className="space-y-4">
                                         {sub.content && (
@@ -1219,22 +1283,16 @@ const ProjectDetail: React.FC = () => {
                                         )}
                                         {(() => {
                                             try {
-                                                const isWatermark = clientDeliverableModal.task.delivery_state === 'watermark_delivered';
-                                                const isFinal = clientDeliverableModal.task.delivery_state === 'final_delivered';
-
                                                 const finalPaths: string[] = (isFinal && sub.file_paths) ? JSON.parse(sub.file_paths) : [];
-                                                
+
                                                 let watermarkPaths: string[] = [];
                                                 if (!isFinal) {
-                                                    // Primary: watermarked_file_paths holds the pre-built public URL
-                                                    // stored by the backend as JSON array, e.g. ["https://...supabase.../preview/file.png"]
                                                     if (sub.watermarked_file_paths) {
                                                         try {
                                                             const parsed = JSON.parse(sub.watermarked_file_paths);
                                                             if (Array.isArray(parsed)) watermarkPaths = parsed.filter(Boolean);
                                                         } catch { watermarkPaths = []; }
                                                     }
-                                                    // Fallback: reconstruct URL from raw storage path
                                                     if (watermarkPaths.length === 0 && sub.watermark_file_path) {
                                                         const parts = sub.watermark_file_path.split('/');
                                                         const bucket = parts[0];
@@ -1284,9 +1342,117 @@ const ProjectDetail: React.FC = () => {
                                                 );
                                             } catch { return null; }
                                         })()}
+
+                                        {/* Clarification message from manager */}
+                                        {reviewStatus === 'clarification_requested' && sub.manager_note && (
+                                            <div className="rounded-2xl p-4 bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-800/40">
+                                                <p className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-1">Manager needs clarification</p>
+                                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{sub.manager_note}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Review status badge */}
+                                        {isWatermark && (() => {
+                                            const info = reviewStatusLabel[reviewStatus];
+                                            if (!info) return null;
+                                            return (
+                                                <div className={`rounded-2xl px-4 py-3 border text-sm font-medium ${info.color}`}>
+                                                    {info.label}
+                                                </div>
+                                            );
+                                        })()}
+
+                                        {/* Approve / Reject actions — only for pending watermark previews */}
+                                        {isWatermark && !alreadyReviewed && (
+                                            <div className="flex gap-3 pt-2">
+                                                <button
+                                                    onClick={handleClientApprove}
+                                                    disabled={approveSubmitting}
+                                                    className="flex-1 py-3 rounded-2xl bg-green-600 text-white font-black text-sm shadow-lg shadow-green-500/20 hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                                >
+                                                    {approveSubmitting ? 'Approving…' : <><CheckCircle2 size={16} /> Approve Preview</>}
+                                                </button>
+                                                <button
+                                                    onClick={() => { setRejectModalOpen(true); setRejectFeedback(''); setRejectError(null); }}
+                                                    className="flex-1 py-3 rounded-2xl border border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 font-black text-sm hover:bg-rose-50 dark:hover:bg-rose-900/10 transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    <X size={16} /> Request Changes
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Previous rejection feedback display */}
+                                        {reviewStatus === 'rejected' && sub.client_feedback && (
+                                            <div className="rounded-2xl p-4 bg-rose-50 dark:bg-rose-900/10 border border-rose-200 dark:border-rose-800/40">
+                                                <p className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1">Your feedback</p>
+                                                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{sub.client_feedback}</p>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })()}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reject Feedback Modal */}
+            {rejectModalOpen && clientDeliverableModal && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-gray-950/70 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-900 rounded-[2rem] shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 dark:border-gray-800">
+                        <div className="px-8 py-6 border-b border-gray-50 dark:border-gray-800 flex justify-between items-start">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <MessageSquare size={16} className="text-rose-500" />
+                                    <span className="text-xs font-bold text-rose-500 uppercase tracking-widest">Request Changes</span>
+                                </div>
+                                <h2 className="text-xl font-black text-gray-900 dark:text-white">{clientDeliverableModal.task.title}</h2>
+                            </div>
+                            <button
+                                onClick={() => setRejectModalOpen(false)}
+                                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors"
+                            >
+                                <X size={20} className="text-gray-400" />
+                            </button>
+                        </div>
+                        <div className="px-8 py-6 space-y-4">
+                            <div className="space-y-2">
+                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Your Feedback</label>
+                                <textarea
+                                    rows={5}
+                                    className="w-full bg-gray-50 dark:bg-gray-950 border-none rounded-2xl px-5 py-4 text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-rose-400/30 transition-all resize-none placeholder-gray-300 dark:placeholder-gray-700"
+                                    placeholder="Explain what should be changed. Mention colors, text, layout, missing details, or corrections."
+                                    value={rejectFeedback}
+                                    onChange={e => { setRejectFeedback(e.target.value); setRejectError(null); }}
+                                />
+                                <div className="flex justify-between text-xs">
+                                    <span className={rejectFeedback.trim().length < 10 ? 'text-gray-400' : 'text-green-500'}>
+                                        {rejectFeedback.trim().length} / 2000 chars (min 10)
+                                    </span>
+                                </div>
+                            </div>
+                            {rejectError && (
+                                <div className="flex items-center gap-2 text-sm text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl px-3 py-2.5">
+                                    <AlertTriangle size={15} className="shrink-0" />
+                                    {rejectError}
+                                </div>
+                            )}
+                        </div>
+                        <div className="px-8 py-5 bg-gray-50/50 dark:bg-gray-800/50 flex gap-3">
+                            <button
+                                onClick={() => setRejectModalOpen(false)}
+                                disabled={rejectSubmitting}
+                                className="flex-1 py-3.5 border border-gray-200 dark:border-gray-700 rounded-2xl font-bold text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 transition-all text-sm disabled:opacity-40"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleClientReject}
+                                disabled={rejectSubmitting || rejectFeedback.trim().length < 10}
+                                className="flex-[2] py-3.5 bg-rose-600 text-white rounded-2xl font-black shadow-xl shadow-rose-500/20 hover:shadow-rose-500/40 transition-all flex items-center justify-center gap-2 disabled:opacity-50 text-sm"
+                            >
+                                {rejectSubmitting ? 'Submitting…' : <><Send size={16} /> Submit Feedback</>}
+                            </button>
                         </div>
                     </div>
                 </div>

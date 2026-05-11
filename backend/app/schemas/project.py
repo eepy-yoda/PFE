@@ -38,6 +38,8 @@ class ProjectRead(ProjectBase):
     payment_updated_at: Optional[datetime] = None
     clarification_notes: Optional[str] = None
     brief_content: Optional[str] = None
+    ai_resume: Optional[str] = None
+    reference_image: Optional[str] = None
     paid_at: Optional[datetime] = None
     delivered_at: Optional[datetime] = None
     created_at: datetime
