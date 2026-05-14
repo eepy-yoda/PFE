@@ -213,7 +213,7 @@ const ProjectDetail: React.FC = () => {
 
     const handleClientReject = async () => {
         if (!clientDeliverableModal) return;
-        const sub = clientDeliverableModal.subs[0];
+        const sub = clientDeliverableModal.subs.find(s => s.watermarked_file_paths || s.watermark_file_path) ?? clientDeliverableModal.subs[0];
         if (!sub) return;
         const trimmed = rejectFeedback.trim();
         if (trimmed.length < 10) {
@@ -238,7 +238,7 @@ const ProjectDetail: React.FC = () => {
 
     const handleClientApprove = async () => {
         if (!clientDeliverableModal) return;
-        const sub = clientDeliverableModal.subs[0];
+        const sub = clientDeliverableModal.subs.find(s => s.watermarked_file_paths || s.watermark_file_path) ?? clientDeliverableModal.subs[0];
         if (!sub) return;
         setApproveSubmitting(true);
         try {
@@ -1260,9 +1260,11 @@ const ProjectDetail: React.FC = () => {
                                     <p className="text-gray-400 dark:text-gray-500 font-bold">No files available yet.</p>
                                 </div>
                             ) : (() => {
-                                const sub = clientDeliverableModal.subs[0];
                                 const isWatermark = clientDeliverableModal.task.delivery_state === 'watermark_delivered';
                                 const isFinal = clientDeliverableModal.task.delivery_state === 'final_delivered';
+                                const sub = isWatermark
+                                    ? (clientDeliverableModal.subs.find(s => s.watermarked_file_paths || s.watermark_file_path) ?? clientDeliverableModal.subs[0])
+                                    : clientDeliverableModal.subs[0];
                                 const reviewStatus = sub.client_review_status ?? 'pending';
                                 const alreadyReviewed = reviewStatus !== 'pending';
 
