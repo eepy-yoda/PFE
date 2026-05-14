@@ -1035,7 +1035,7 @@ const ProjectDetail: React.FC = () => {
                                         <div className="h-20 bg-gray-100 dark:bg-gray-800 rounded-2xl" />
                                     </div>
                                 ) : detailSubs.length > 0 ? (() => {
-                                    const sub = detailSubs[detailSubs.length - 1];
+                                    const sub = detailSubs[0];
                                     const statusColors: Record<string, string> = {
                                         validated: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800',
                                         rejected:  'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800',
