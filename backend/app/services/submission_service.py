@@ -135,7 +135,7 @@ def _send_submission_webhook(
             except Exception as img_err:
                 logger.warning("Could not fetch image for webhook (%s): %s", url, img_err)
 
-        resp = requests.post(webhook_url, data=text_fields, files=binary_files, headers=headers, timeout=30)
+        resp = requests.post(webhook_url, data=text_fields, files=binary_files, headers=headers, timeout=20)
         logger.info("Webhook (multipart) → %s | status=%d", webhook_url, resp.status_code)
 
         if resp.status_code < 500:
@@ -146,7 +146,14 @@ def _send_submission_webhook(
         return None
 
     except Exception as mp_err:
-        logger.warning("Multipart webhook failed (%s). Falling back to JSON+base64.", mp_err)
+        logger.warning("Multipart webhook failed (%s).", mp_err)
+        # If it was a timeout or connection error, the tunnel is likely down. 
+        # Don't waste another 20s on a fallback that will also fail.
+        if "timeout" in str(mp_err).lower() or "connection" in str(mp_err).lower():
+            logger.error("Tunnel appears down/slow. Skipping fallback to avoid further blocking.")
+            return None
+        
+        logger.info("Attempting fallback to JSON+base64...")
 
     images_b64: list[dict] = []
     for url in file_urls:
@@ -167,7 +174,7 @@ def _send_submission_webhook(
 
     fallback_payload = {**meta, "images": images_b64}
     try:
-        resp = requests.post(webhook_url, json=fallback_payload, headers=headers, timeout=30)
+        resp = requests.post(webhook_url, json=fallback_payload, headers=headers, timeout=20)
         logger.info("Webhook (json+b64) → %s | status=%d", webhook_url, resp.status_code)
         if resp.status_code < 500:
             try:
@@ -615,6 +622,79 @@ class SubmissionService:
     @staticmethod
     def get_submission(db: Session, submission_id: UUID) -> Optional[TaskSubmission]:
         return db.query(TaskSubmission).filter(TaskSubmission.id == submission_id).first()
+
+    @staticmethod
+    def retrigger_ai_review(
+        db: Session,
+        submission: TaskSubmission,
+        task: Task,
+        current_user_id: UUID,
+    ) -> TaskSubmission:
+        """
+        Resets submission to pending and resends the AI review webhook.
+        Preserves original file_paths, content, and brief_snapshot.
+        If webhook responds synchronously, result is applied immediately.
+        """
+        project = db.query(Project).filter(Project.id == task.project_id).first()
+        employee = db.query(User).filter(User.id == submission.submitted_by).first()
+
+        employee_name = employee.full_name if employee else "Employee"
+        project_name = project.name if project else "Unknown Project"
+
+        # Reset AI state, keep original submission data intact
+        submission.submission_status = SubmissionStatus.pending
+        submission.ai_analysis_result = None
+        submission.ai_score = None
+        submission.ai_feedback = None
+        submission.webhook_response = None
+        db.commit()
+        db.refresh(submission)
+
+        file_urls: list[str] = []
+        if submission.file_paths:
+            try:
+                file_urls = json.loads(submission.file_paths)
+            except Exception:
+                pass
+
+        _webhook_url = settings.SUBMISSION_REVIEW_WEBHOOK_URL or settings.N8N_WORK_SUBMISSION_WEBHOOK
+        if _webhook_url:
+            try:
+                webhook_resp = _send_submission_webhook(
+                    webhook_url=_webhook_url,
+                    webhook_secret=settings.N8N_WEBHOOK_SECRET or "",
+                    task=task,
+                    submission=submission,
+                    submitted_by=submission.submitted_by,
+                    employee_name=employee_name,
+                    project_name=project_name,
+                    task_title=task.title,
+                    brief_snapshot=submission.brief_snapshot,
+                    file_urls=file_urls,
+                )
+                if webhook_resp is not None:
+                    _apply_webhook_response(
+                        db=db,
+                        submission=submission,
+                        task=task,
+                        raw_webhook_data=webhook_resp,
+                        employee_name=employee_name,
+                        project_name=project_name,
+                    )
+                    db.commit()
+                    db.refresh(submission)
+            except Exception as wh_err:
+                logger.error(
+                    "Retrigger webhook error for submission=%s (preserved as pending): %s",
+                    submission.id, wh_err,
+                )
+        else:
+            logger.warning(
+                "Webhook URL not configured — submission %s reset to pending, no webhook sent.",
+                submission.id,
+            )
+
+        return submission
 
 
 submission_service = SubmissionService()

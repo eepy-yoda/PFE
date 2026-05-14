@@ -97,6 +97,17 @@ export const submissionsApi = {
   },
 
   /**
+   * Worker retriggering AI review for an existing submission.
+   * Backend: POST /api/v1/submissions/{submissionId}/retrigger-ai-review
+   */
+  async retriggerAiReview(submissionId: string): Promise<TaskSubmission> {
+    const response = await api.post<TaskSubmission>(
+      `/submissions/${submissionId}/retrigger-ai-review`,
+    );
+    return response.data;
+  },
+
+  /**
    * Upload a single image file to Supabase Storage.
    * Returns the public URL of the uploaded file.
    * Uses XHR for per-file upload progress tracking.

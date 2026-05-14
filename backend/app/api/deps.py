@@ -20,15 +20,39 @@ oauth2_scheme_optional = OAuth2PasswordBearer(
 )
 
 
+# Simple in-memory cache for validated tokens: {token_str: (user_id, email, expiry_timestamp)}
+_auth_cache = {}
+_CACHE_TTL = 300  # 5 minutes
+
+
 def _validate_supabase_token(token: str):
     """Validate a Supabase JWT by calling Supabase's auth service.
     Returns (user_id: str, user_email: str) on success, raises HTTPException on failure."""
     from app.services.supabase_client import supabase
+    import time
+
+    # 1. Check cache first
+    now = time.time()
+    if token in _auth_cache:
+        user_id, email, expiry = _auth_cache[token]
+        if now < expiry:
+            logger.debug("[AUTH] Token cache hit — user_id=%s", user_id)
+            return user_id, email
+        else:
+            del _auth_cache[token]
+
     try:
+        # 2. Call Supabase API
+        # Note: on Windows, high concurrency with sync httpx calls can trigger WinError 10035.
+        # Reducing frequency via caching is the best first-line defense.
         response = supabase.auth.get_user(token)
         user_id = str(response.user.id)
         user_email = response.user.email or ""
-        logger.info("[AUTH] Token valid — Supabase user_id=%s email=%s", user_id, user_email)
+        
+        # 3. Cache the result
+        _auth_cache[token] = (user_id, user_email, now + _CACHE_TTL)
+        
+        logger.info("[AUTH] Token valid (API) — Supabase user_id=%s email=%s", user_id, user_email)
         return user_id, user_email
     except Exception as e:
         logger.warning("[AUTH] Token validation failed: %s", e)

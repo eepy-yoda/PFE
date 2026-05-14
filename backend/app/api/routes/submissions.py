@@ -447,6 +447,41 @@ def manager_review_client_rejection(
     return submission
 
 
+@router.post("/{submission_id}/retrigger-ai-review", response_model=SubmissionRead)
+def retrigger_ai_review(
+    submission_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Worker triggers a fresh AI review for an existing submission.
+    Resets the submission to pending and resends the webhook.
+    Blocked while a review is already in progress (status=pending).
+    Managers and admins can also call this.
+    """
+    _require_employee_or_above(current_user)
+
+    submission = db.query(TaskSubmission).filter(TaskSubmission.id == submission_id).first()
+    if not submission:
+        raise HTTPException(status_code=404, detail="Submission not found")
+
+    task = db.query(Task).filter(Task.id == submission.task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if current_user.role == UserRole.employee:
+        if submission.submitted_by != current_user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        if task.assigned_to != current_user.id:
+            raise HTTPException(status_code=403, detail="Not assigned to this task")
+
+    from app.models.task import SubmissionStatus
+    if submission.submission_status == SubmissionStatus.pending:
+        raise HTTPException(status_code=409, detail="AI review already in progress")
+
+    return submission_service.retrigger_ai_review(db, submission, task, current_user.id)
+
+
 @router.post("/webhook-callback", response_model=SubmissionRead)
 def receive_webhook_callback(
     payload: WebhookCallbackPayload,

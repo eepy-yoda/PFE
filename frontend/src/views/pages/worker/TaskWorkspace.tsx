@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     ArrowLeft, ArrowRight, Calendar, Clock, Send,
     MessageSquare, ChevronDown,
-    ChevronUp, FileText, Activity, Upload,
+    ChevronUp, FileText, Activity, Upload, ExternalLink, FileImage, Link2,
 } from 'lucide-react';
 import WorkerNav from '../../components/worker/WorkerNav';
 import SubmitWorkModal from '../../../components/SubmitWorkModal';
@@ -83,6 +83,7 @@ const TaskWorkspace: React.FC = () => {
     const [activity, setActivity] = useState<ActivityEvent[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitModalOpen, setSubmitModalOpen] = useState(false);
+    const [briefExpanded, setBriefExpanded] = useState(false);
 
     const loadData = useCallback(async () => {
         if (!taskId) return;
@@ -187,8 +188,19 @@ const TaskWorkspace: React.FC = () => {
                     )}
                     {task.project_brief && (
                         <div className="mt-4 p-4 bg-amber-50/60 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl">
-                            <p className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 mb-2">Client Brief (read-only)</p>
-                            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap line-clamp-6">{task.project_brief}</p>
+                            <div className="flex items-center justify-between mb-2">
+                                <p className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400">Client Brief (read-only)</p>
+                                <button
+                                    onClick={() => setBriefExpanded(v => !v)}
+                                    className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                                >
+                                    {briefExpanded ? 'Show less' : 'See full brief'}
+                                    {briefExpanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                                </button>
+                            </div>
+                            <p className={`text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap ${briefExpanded ? '' : 'line-clamp-6'}`}>
+                                {task.project_brief}
+                            </p>
                         </div>
                     )}
                 </Section>
@@ -228,8 +240,20 @@ const TaskWorkspace: React.FC = () => {
                         <div className="space-y-3">
                             <p className="text-[10px] font-bold uppercase text-gray-400 tracking-widest">Submission History</p>
                             {submissions.map((sub, idx) => {
-                                let parsedAI: any = null;
-                                try { parsedAI = sub.ai_analysis_result ? JSON.parse(sub.ai_analysis_result) : null; } catch {}
+                                let filePaths: string[] = [];
+                                let links: string[] = [];
+                                try { filePaths = sub.file_paths ? JSON.parse(sub.file_paths) : []; } catch {}
+                                try { links = sub.links ? JSON.parse(sub.links) : []; } catch {}
+
+                                const aiStatusLabel =
+                                    sub.submission_status === 'validated' ? 'AI Approved' :
+                                    sub.submission_status === 'rejected'  ? 'Needs Revision' :
+                                    'AI Review Pending';
+                                const aiStatusCls =
+                                    sub.submission_status === 'validated' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                                    sub.submission_status === 'rejected'  ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' :
+                                    'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400';
+
                                 return (
                                     <div key={sub.id} className="border border-gray-100 dark:border-gray-800 rounded-xl p-4">
                                         <div className="flex items-center justify-between mb-2">
@@ -238,29 +262,82 @@ const TaskWorkspace: React.FC = () => {
                                                 {idx === 0 && <span className="text-[10px] font-bold text-primary px-1.5 py-0.5 bg-primary/10 rounded">Latest</span>}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                                                    sub.submission_status === 'validated' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                                    sub.submission_status === 'rejected' ? 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' :
-                                                    'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                                                }`}>
-                                                    {sub.submission_status}
+                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${aiStatusCls}`}>
+                                                    {aiStatusLabel}
                                                 </span>
                                                 <span className="text-[10px] text-gray-400">{new Date(sub.created_at).toLocaleDateString()}</span>
                                             </div>
                                         </div>
-                                        {sub.content && <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">{sub.content}</p>}
+
+                                        {sub.content && (
+                                            <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">{sub.content}</p>
+                                        )}
+
+                                        {filePaths.length > 0 && (
+                                            <div className="mb-2">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                                                    <FileImage size={10} /> {filePaths.length} file{filePaths.length !== 1 ? 's' : ''}
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {filePaths.slice(0, 4).map((url, fi) => (
+                                                        <a
+                                                            key={fi}
+                                                            href={url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="w-14 h-14 rounded-lg overflow-hidden border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 flex items-center justify-center hover:opacity-80 transition-opacity"
+                                                        >
+                                                            {/\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url) ? (
+                                                                <img src={url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                                                            ) : (
+                                                                <ExternalLink size={14} className="text-gray-400" />
+                                                            )}
+                                                        </a>
+                                                    ))}
+                                                    {filePaths.length > 4 && (
+                                                        <div className="w-14 h-14 rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-800 flex items-center justify-center text-[10px] font-bold text-gray-400">
+                                                            +{filePaths.length - 4}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {links.length > 0 && (
+                                            <div className="mb-2">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                                    <Link2 size={10} /> {links.length} link{links.length !== 1 ? 's' : ''}
+                                                </p>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {links.map((url, li) => (
+                                                        <a
+                                                            key={li}
+                                                            href={url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-[10px] font-medium text-primary hover:underline flex items-center gap-1 truncate max-w-[160px]"
+                                                        >
+                                                            <ExternalLink size={10} className="flex-shrink-0" />{url}
+                                                        </a>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
                                         {sub.ai_score != null && (
-                                            <div className="mt-2 flex items-center gap-2">
+                                            <div className="mt-1 mb-2">
                                                 <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400">AI Score: {sub.ai_score}/100</span>
                                             </div>
                                         )}
-                                        {parsedAI && idx === 0 && (
+
+                                        {idx === 0 && sub.ai_analysis_result && (
                                             <div className="mt-3">
-                                                <AIAnalysisCard aiAnalysisResult={parsedAI} />
+                                                <AIAnalysisCard aiAnalysisResult={sub.ai_analysis_result} />
                                             </div>
                                         )}
+
                                         <div className="mt-3 flex justify-end">
-                                            <button 
+                                            <button
                                                 onClick={() => navigate(`/worker/tasks/${taskId}/review/${sub.id}`)}
                                                 className="text-[11px] font-bold text-primary hover:underline flex items-center gap-1"
                                             >
